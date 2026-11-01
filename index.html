@@ -450,6 +450,17 @@ img{display:block;max-width:100%}
 .items-grid.covers-only .item-card{background:none;box-shadow:none;overflow:visible}
 .items-grid.covers-only .item-info{display:none}
 .items-grid.covers-only .item-poster-wrap{border-radius:3px;box-shadow:0 4px 14px rgba(0,0,0,.22)}
+/* vista cronologia acquisti */
+#libreria-grid.acq-view{display:flex;flex-direction:column;gap:8px}
+.acq-month{margin:18px 0 2px;padding-bottom:6px;border-bottom:2px solid var(--border);font-size:16px;font-weight:700;color:var(--text);text-transform:capitalize;display:flex;gap:10px;align-items:baseline}
+.acq-month:first-child{margin-top:0}
+.acq-month span{font-size:12.5px;font-weight:600;color:var(--text3);text-transform:none}
+.acq-row{display:flex;gap:12px;align-items:center;padding:8px 12px;background:var(--surface);border-radius:var(--r-sm);box-shadow:var(--shadow-sm);cursor:pointer}
+.acq-row:hover{box-shadow:var(--shadow-hover)}
+.acq-row img,.acq-row .acq-ph{width:34px;height:51px;object-fit:cover;object-position:center top;border-radius:3px;flex-shrink:0;background:var(--bg2)}
+.acq-row .acq-t{font-weight:600;font-size:13px;color:var(--text)}
+.acq-row .acq-a{font-size:12px;color:var(--text3)}
+.acq-row .acq-meta{margin-left:auto;text-align:right;font-size:12px;color:var(--text2);white-space:nowrap}
 .grid-section{
   grid-column:1/-1;margin:22px 0 2px;padding-bottom:8px;
   border-bottom:2px solid var(--border);
@@ -1206,6 +1217,7 @@ img{display:block;max-width:100%}
               <option value="rating">Valutazione</option>
             </select>
             <button class="chip" id="libreria-view" title="Mostra solo le copertine">🖼 Copertine</button>
+            <button class="chip" id="libreria-acq" title="Cronologia acquisti">🧾 Acquisti</button>
             <input type="search" class="search-box" id="libreria-search" placeholder="Filtra titoli...">
             <input type="search" class="search-box" id="libreria-author" placeholder="Cerca autore..." style="max-width:180px">
             <button class="btn-add-item" id="btn-add-libreria">+ Aggiungi libro</button>
@@ -1931,7 +1943,30 @@ function renderLibriGrid() {
   renderAuthorFilters();
   renderShelfSidebar();
   let libriHTML = '';
-  if (lFilter.status === 'all') {
+  let acqCount = 0;
+  if (lFilter.acq) {
+    const eur = n => n.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
+    const dated = items.filter(i => i.dataAcquisto).sort((a, b) => b.dataAcquisto.localeCompare(a.dataAcquisto));
+    acqCount = dated.length;
+    const byMonth = new Map();
+    dated.forEach(b => { const k = b.dataAcquisto.slice(0, 7); if (!byMonth.has(k)) byMonth.set(k, []); byMonth.get(k).push(b); });
+    libriHTML = [...byMonth.entries()].map(([k, arr]) => {
+      const tot = arr.reduce((a, b) => a + (typeof b.prezzo === 'number' ? b.prezzo : 0), 0);
+      const label = new Date(k + '-01T12:00:00').toLocaleDateString('it-IT', { month: 'long', year: 'numeric' });
+      return `<div class="acq-month">${label} <span>${arr.length} ${arr.length === 1 ? 'libro' : 'libri'}${tot ? ' · ' + eur(tot) : ''}</span></div>` +
+        arr.map(b => {
+          const src = b.cover || b.poster || '';
+          const d = new Date(b.dataAcquisto + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+          return `<div class="acq-row" data-id="${b.id}">
+            ${src ? `<img src="${esc(src)}" alt="" loading="lazy">` : '<div class="acq-ph"></div>'}
+            <div><div class="acq-t">${esc(b.title)}</div><div class="acq-a">${esc((b.authors || []).join(', '))}</div></div>
+            <div class="acq-meta">${d}${typeof b.prezzo === 'number' ? '<br>' + eur(b.prezzo) : ''}${b.negozio ? '<br>' + esc(b.negozio) : ''}</div>
+          </div>`;
+        }).join('');
+    }).join('');
+    const tot = dated.reduce((a, b) => a + (typeof b.prezzo === 'number' ? b.prezzo : 0), 0);
+    if (dated.length) libriHTML = `<div style="font-size:12.5px;color:var(--text3)">${dated.length} acquisti${tot ? ' · totale ' + eur(tot) : ''} · ${items.length - dated.length} senza data</div>` + libriHTML;
+  } else if (lFilter.status === 'all') {
     // vista "Tutti": prima In lettura, poi Da leggere, poi gli altri
     const groups = [
       ['In lettura',   items.filter(i => i.status === 'in_lettura')],
@@ -1944,9 +1979,13 @@ function renderLibriGrid() {
   } else {
     libriHTML = items.map(i => cardHTML(i,'libro')).join('');
   }
-  $('libreria-grid').classList.toggle('covers-only', !!lFilter.coversOnly);
+  $('libreria-grid').classList.toggle('covers-only', !!lFilter.coversOnly && !lFilter.acq);
+  $('libreria-grid').classList.toggle('acq-view', !!lFilter.acq);
+  $('libreria-acq').classList.toggle('on', !!lFilter.acq);
   $('libreria-view').classList.toggle('on', !!lFilter.coversOnly);
-  $('libreria-grid').innerHTML = items.length
+  $('libreria-grid').innerHTML = lFilter.acq && !acqCount
+    ? `<div class="empty-state"><div class="empty-icon">🧾</div><div class="empty-title">Nessun acquisto registrato</div><div class="empty-sub">Apri un libro e compila "Acquisto" (data, prezzo, negozio).</div></div>`
+    : items.length
     ? libriHTML
     : `<div class="empty-state">
         <div class="empty-icon">📚</div>
@@ -2051,6 +2090,14 @@ function openDetail(item, ctx) {
             <option value="cartaceo" ${detailItem.supporto==='cartaceo'?'selected':''}>Cartaceo</option>
             <option value="kindle" ${detailItem.supporto==='kindle'?'selected':''}>Kindle</option>
           </select>
+        </div>
+        <div class="form-field" style="margin-top:10px">
+          <div class="field-label">Acquisto</div>
+          <input type="date" class="field-select" id="d-acq-date" value="${esc(detailItem.dataAcquisto||'')}" title="Data di acquisto">
+          <div style="display:flex;gap:6px;margin-top:6px">
+            <input type="number" step="0.01" min="0" class="field-select" id="d-acq-price" placeholder="Prezzo €" value="${detailItem.prezzo!=null?esc(detailItem.prezzo):''}" style="flex:1;min-width:0">
+            <input type="text" class="field-select" id="d-acq-shop" placeholder="Negozio" value="${esc(detailItem.negozio||'')}" style="flex:1;min-width:0">
+          </div>
         </div>` : ''}
 
         <button class="btn-fav${detailItem.isFav?' on':''}" id="d-fav" style="width:100%;margin-bottom:12px;justify-content:center;display:flex">
@@ -2244,7 +2291,7 @@ function openDetail(item, ctx) {
       notes:  document.getElementById('d-notes').value,
       rating: curRating,
       tags:   curTags,
-      ...(isBook ? { shelves: curShelves, supporto: (document.getElementById('d-supporto')||{}).value || '' } : {}),
+      ...(isBook ? { shelves: curShelves, supporto: (document.getElementById('d-supporto')||{}).value || '', dataAcquisto: (document.getElementById('d-acq-date')||{}).value || null, prezzo: (() => { const v = parseFloat(((document.getElementById('d-acq-price')||{}).value || '').replace(',', '.')); return isNaN(v) ? null : v; })(), negozio: ((document.getElementById('d-acq-shop')||{}).value || '').trim() } : {}),
       completedAt: isDone
         ? (document.getElementById('d-completed-date').value || todayInputValue())
         : (detailItem.completedAt || null),
@@ -3080,6 +3127,13 @@ $('libreria-view').addEventListener('click', () => {
   lFilter.coversOnly = !lFilter.coversOnly;
   try { localStorage.setItem('teca-covers-only', lFilter.coversOnly ? '1' : '0'); } catch(e) {}
   renderLibriGrid();
+});
+$('libreria-acq').addEventListener('click', () => { lFilter.acq = !lFilter.acq; renderLibriGrid(); });
+$('libreria-grid').addEventListener('click', e => {
+  const r = e.target.closest('.acq-row');
+  if (!r) return;
+  const it = libriItems.find(i => i.id === r.dataset.id);
+  if (it) openDetail(it, 'libro');
 });
 $('libreria-sort').addEventListener('change', e => { lFilter.sort = e.target.value; renderLibriGrid(); });
 $('libreria-author').addEventListener('input', e => { lFilter.author = e.target.value; renderLibriGrid(); });
