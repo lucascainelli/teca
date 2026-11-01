@@ -3588,7 +3588,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
     if (r.p && book.supporto !== r.p) { upd.supporto = r.p; nSup++; }
     if (r.f && !book.isFav) { upd.isFav = true; nFav++; }
     const st = statusMap[r.s];
-    if (st && st !== book.status && (st !== 'archivio' || book.status === 'da_leggere') && (st !== 'vorrei_leggere' || ['da_leggere', 'archivio'].includes(book.status))) upd.status = st;
+    if (st && st !== book.status && (st !== 'archivio' || ['da_leggere', 'vorrei_leggere'].includes(book.status)) && (st !== 'vorrei_leggere' || ['da_leggere', 'archivio'].includes(book.status))) upd.status = st;
     if (r.r > 0 && r.r !== book.rating) upd.rating = r.r;
     if ((upd.status || book.status) === 'letto' && !book.completedAt && r.d) {
       const iso = grDateToIso(r.d); if (iso) upd.completedAt = iso;
