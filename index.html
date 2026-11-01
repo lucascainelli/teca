@@ -1833,7 +1833,7 @@ function cardHTML(item, ctx) {
   return `<div class="item-card" data-id="${item.id}" data-ctx="${ctx}">
     <div class="item-poster-wrap">
       ${src
-        ? `<img class="item-poster-img" src="${hiRes(src)}" alt="${esc(item.title)}" loading="lazy" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`
+        ? `<img class="item-poster-img" src="${hiRes(src)}" data-o="${esc(src)}" alt="${esc(item.title)}" loading="lazy" onerror="if(this.dataset.o&&!this.dataset.t){this.dataset.t=1;this.src=this.dataset.o;return}this.style.display='none';this.nextSibling.style.display='flex'">`
         : ''}
       <div class="item-poster-ph" style="${src ? 'display:none' : ''}">${esc(item.title[0]||'?')}</div>
       ${item.isFav ? '<div class="item-fav-badge">⭐</div>' : ''}
@@ -1887,7 +1887,7 @@ function openDetail(item, ctx) {
     <div class="detail-grid">
       <div class="detail-poster-col">
         ${src
-          ? `<img class="detail-poster-img" id="d-cover-img" src="${hiRes(src)}" alt="${esc(detailItem.title)}" onerror="this.style.display='none';this.nextSibling.style.display='flex'">
+          ? `<img class="detail-poster-img" id="d-cover-img" src="${hiRes(src)}" data-o="${esc(src)}" alt="${esc(detailItem.title)}" onerror="if(this.dataset.o&&!this.dataset.t){this.dataset.t=1;this.src=this.dataset.o;return}this.style.display='none';this.nextSibling.style.display='flex'">
              <div class="detail-poster-ph" style="display:none">${esc(detailItem.title[0]||'?')}</div>`
           : `<div class="detail-poster-ph" id="d-cover-ph">${esc(detailItem.title[0]||'?')}</div>`}
         <input type="url" id="d-cover-url" placeholder="URL copertina..." value="${esc(src)}"
