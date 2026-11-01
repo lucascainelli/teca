@@ -3330,8 +3330,11 @@ const au=g('td.field.author a');const d=g('td.field.date_read .date_read_value')
 all[id]={t:(a.getAttribute('title')||a.textContent).trim(),a:au?au.textContent.trim():'',c:c,s:s,r:tr.querySelectorAll('td.field.rating .staticStar.p10').length,d:d?d.textContent.trim():''};
 });
 localStorage.setItem(k,JSON.stringify(all));
-copy(JSON.stringify(Object.values(all)));
-console.log(Object.keys(all).length+' libri copiati negli appunti');
+const out=JSON.stringify(Object.values(all));
+document.querySelectorAll('.teca-gr-ta').forEach(x=>x.remove());
+const ta=document.createElement('textarea');ta.className='teca-gr-ta';ta.value=out;ta.style.cssText='position:fixed;top:10px;left:10px;width:420px;height:110px;z-index:999999;font-size:11px';document.body.appendChild(ta);ta.focus();ta.select();
+let ok=false;try{ok=document.execCommand('copy')}catch(e){}
+console.log(Object.keys(all).length+' libri'+(ok?' copiati negli appunti':': premi Ctrl+C nel riquadro in alto a sinistra della pagina'));
 })()`;
 
 function grNorm(t) {
