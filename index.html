@@ -1175,6 +1175,10 @@ img{display:block;max-width:100%}
             <button class="shelf-add-btn" id="shelf-add-btn">+ Crea</button>
           </div>
           <div class="shelf-sidebar-hdr" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+            <span class="shelf-sidebar-title">Supporto</span>
+          </div>
+          <div class="tag-filter-wrap sidebar-tags" id="libreria-supporto-filters"></div>
+          <div class="shelf-sidebar-hdr" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
             <span class="shelf-sidebar-title">Autori</span>
           </div>
           <div class="tag-filter-wrap sidebar-tags" id="libreria-author-filters"></div>
@@ -1345,7 +1349,7 @@ let shelvesList = [];
 let shelfEditMode = false;
 let unsubShelves;
 let cFilter     = { type:'all', status:'all', sort:'recent', q:'', tag:'' };
-let lFilter     = { status:'all', sort:'recent', q:'', tag:'', author:'', shelf:'' };
+let lFilter     = { status:'all', sort:'recent', q:'', tag:'', author:'', shelf:'', supporto:'' };
 let searchType  = 'film';
 let srTimer     = null;
 let srCache     = [];
@@ -1581,6 +1585,14 @@ function renderTagFilters(ctx) {
 // ── Autori nella barra laterale della Libreria (primi 5, poi "Mostra tutti")
 const sbExpanded = { tags: false, authors: false };
 const tagEdit = { on: false, pending: '' };
+function renderSupportoFilters() {
+  const el = $('libreria-supporto-filters');
+  if (!el) return;
+  const n = { cartaceo: 0, kindle: 0 };
+  libriItems.forEach(b => { if (n[b.supporto] !== undefined) n[b.supporto]++; });
+  el.innerHTML = [['cartaceo', 'Cartaceo'], ['kindle', 'Kindle']].map(([k, l]) =>
+    `<button class="author-chip sup-chip${lFilter.supporto === k ? ' on' : ''}" data-sup="${k}">${l} <span style="opacity:.6">${n[k]}</span></button>`).join('');
+}
 function renderAuthorFilters() {
   const el = $('libreria-author-filters');
   if (!el) return;
@@ -1612,6 +1624,8 @@ document.addEventListener('click', async e => {
     renderLibriGrid();
     return;
   }
+  const sup = e.target.closest('.sup-chip');
+  if (sup) { lFilter.supporto = lFilter.supporto === sup.dataset.sup ? '' : sup.dataset.sup; renderLibriGrid(); return; }
   const more = e.target.closest('.sb-more');
   if (more) { sbExpanded[more.dataset.more] = !sbExpanded[more.dataset.more]; renderLibriGrid(); return; }
   const ch = e.target.closest('.author-chip');
@@ -1897,7 +1911,9 @@ function renderLibriGrid() {
   items = sortArr(items, lFilter.sort);
   if (lFilter.tag) items = items.filter(i => (i.tags||[]).includes(lFilter.tag));
   if (lFilter.shelf) items = items.filter(i => (i.shelves||[]).includes(lFilter.shelf));
+  if (lFilter.supporto) items = items.filter(i => (i.supporto||'') === lFilter.supporto);
   renderTagFilters('libreria');
+  renderSupportoFilters();
   renderAuthorFilters();
   renderShelfSidebar();
   let libriHTML = '';
@@ -2014,6 +2030,14 @@ function openDetail(item, ctx) {
             ${statusOpts.map(s => `<option value="${s}" ${detailItem.status===s?'selected':''}>${statusLabel(s)}</option>`).join('')}
           </select>
         </div>
+        ${isBook ? `<div class="form-field" style="margin-top:10px">
+          <div class="field-label">Supporto</div>
+          <select class="field-select" id="d-supporto">
+            <option value="" ${!detailItem.supporto?'selected':''}>—</option>
+            <option value="cartaceo" ${detailItem.supporto==='cartaceo'?'selected':''}>Cartaceo</option>
+            <option value="kindle" ${detailItem.supporto==='kindle'?'selected':''}>Kindle</option>
+          </select>
+        </div>` : ''}
 
         <button class="btn-fav${detailItem.isFav?' on':''}" id="d-fav" style="width:100%;margin-bottom:12px;justify-content:center;display:flex">
           ${detailItem.isFav ? '⭐ Preferito' : '☆ Preferito'}
@@ -2206,7 +2230,7 @@ function openDetail(item, ctx) {
       notes:  document.getElementById('d-notes').value,
       rating: curRating,
       tags:   curTags,
-      ...(isBook ? { shelves: curShelves } : {}),
+      ...(isBook ? { shelves: curShelves, supporto: (document.getElementById('d-supporto')||{}).value || '' } : {}),
       completedAt: isDone
         ? (document.getElementById('d-completed-date').value || todayInputValue())
         : (detailItem.completedAt || null),
@@ -2716,7 +2740,7 @@ document.getElementById('man-submit').addEventListener('click', async () => {
         type:'libro', title, authors: author ? [author] : [],
         year, cover, overview: notes,
         publisher:'', pageCount:0, googleId:null, isbn13:'',
-        status:'da_leggere', rating:0, notes:'', isFav:false
+        status:'da_leggere', rating:0, notes:'', isFav:false, supporto:'cartaceo'
       });
     } else {
       await addCinema({
@@ -3452,7 +3476,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
   const statusMap = { 'read':'letto', 'to-read':'da_leggere', 'currently-reading':'in_lettura' };
   const grTags = ($('gr-tags').value || '').split(',').map(x => x.trim()).filter(Boolean);
   const btn = $('gr-sync-go'); btn.disabled = true; btn.textContent = 'Sincronizzo…';
-  let nTags = 0;
+  let nTags = 0, nSup = 0;
   const grForce = $('gr-force').checked;
 
   let nCover = 0, nStatus = 0, nRating = 0, matched = 0; const unmatched = []; const used = new Set();
@@ -3471,6 +3495,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
       else if (grForce) { if (cur !== r.c) upd.cover = r.c; }
       else if (cur !== r.c && !(await probeCover(hiRes(cur))) && !(await probeCover(cur))) upd.cover = r.c;
     }
+    if (r.p && book.supporto !== r.p) { upd.supporto = r.p; nSup++; }
     const st = statusMap[r.s];
     if (st && st !== book.status) upd.status = st;
     if (r.r > 0 && r.r !== book.rating) upd.rating = r.r;
@@ -3492,7 +3517,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
     if (matched % 20 === 0) out.textContent = `Elaborati ${matched}…`;
   }
   console.log('Goodreads: non abbinati (' + unmatched.length + '):', unmatched);
-  out.innerHTML = `✓ Abbinati <b>${matched}</b> di ${rows.length}. Aggiornati: <b>${nCover}</b> copertine, <b>${nStatus}</b> stati, <b>${nRating}</b> voti, <b>${nTags}</b> libri con tag. Non abbinati: ${unmatched.length} (elenco in console, F12).`;
+  out.innerHTML = `✓ Abbinati <b>${matched}</b> di ${rows.length}. Aggiornati: <b>${nCover}</b> copertine, <b>${nStatus}</b> stati, <b>${nRating}</b> voti, <b>${nTags}</b> libri con tag, <b>${nSup}</b> supporti. Non abbinati: ${unmatched.length} (elenco in console, F12).`;
   btn.disabled = false; btn.textContent = 'Sincronizza';
 });
 
