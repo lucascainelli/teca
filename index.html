@@ -445,6 +445,13 @@ img{display:block;max-width:100%}
   justify-content:start;
   gap:14px;
 }
+.grid-section{
+  grid-column:1/-1;margin:10px 0 -2px;
+  font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+  color:var(--text3);display:flex;align-items:baseline;gap:8px;
+}
+.grid-section:first-child{margin-top:0}
+.grid-section span{font-weight:500;letter-spacing:0}
 .item-card{
   background:var(--surface);border-radius:var(--r-sm);
   overflow:hidden;cursor:pointer;
@@ -1806,8 +1813,22 @@ function renderLibriGrid() {
   if (lFilter.shelf) items = items.filter(i => (i.shelves||[]).includes(lFilter.shelf));
   renderTagFilters('libreria');
   renderShelfSidebar();
+  let libriHTML = '';
+  if (lFilter.status === 'all') {
+    // vista "Tutti": prima In lettura, poi Da leggere, poi gli altri
+    const groups = [
+      ['In lettura',   items.filter(i => i.status === 'in_lettura')],
+      ['Da leggere',   items.filter(i => i.status === 'da_leggere')],
+      ['Altri libri',  items.filter(i => i.status !== 'in_lettura' && i.status !== 'da_leggere')]
+    ];
+    libriHTML = groups.filter(g => g[1].length).map(g =>
+      `<div class="grid-section">${g[0]} <span>${g[1].length}</span></div>` + g[1].map(i => cardHTML(i,'libro')).join('')
+    ).join('');
+  } else {
+    libriHTML = items.map(i => cardHTML(i,'libro')).join('');
+  }
   $('libreria-grid').innerHTML = items.length
-    ? items.map(i => cardHTML(i,'libro')).join('')
+    ? libriHTML
     : `<div class="empty-state">
         <div class="empty-icon">📚</div>
         <div class="empty-title">Nessun libro</div>
