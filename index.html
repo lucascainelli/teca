@@ -996,6 +996,7 @@ img{display:block;max-width:100%}
     <div class="user-menu-email" id="user-email-display">—</div>
     <div class="user-menu-item" id="btn-import-goodreads">📥 Importa da Goodreads</div>
     <div class="user-menu-item" id="btn-fix-covers">🖼 Aggiorna copertine mancanti</div>
+    <div class="user-menu-item" id="btn-sync-gr">🔄 Sincronizza da Goodreads</div>
     <div class="user-menu-item" id="btn-logout">🚪 Esci</div>
   </div>
 
@@ -3314,6 +3315,100 @@ document.getElementById('import-start-btn').addEventListener('click', async () =
 });
 
 
+
+// ═══════════════ SINCRONIZZA DA GOODREADS ═════════════════════
+const GR_SCRIPT = String.raw`(async()=>{
+const k='teca_gr';let all={};try{all=JSON.parse(localStorage.getItem(k)||'{}')}catch(e){}
+let last=-1,same=0;
+while(same<3){window.scrollTo(0,document.body.scrollHeight);await new Promise(r=>setTimeout(r,1200));const n=document.querySelectorAll('tr.bookalike').length;same=n===last?same+1:0;last=n}
+document.querySelectorAll('tr.bookalike').forEach(tr=>{
+const g=q=>tr.querySelector(q);const a=g('td.field.title a');const id=(((a&&a.href)||'').match(/show\/(\d+)/)||[])[1];if(!id)return;
+const img=g('td.field.cover img');let c=((img&&img.src)||'').replace(/\._S[XY]\d+_/,'');if(/nophoto/.test(c))c='';
+const sh=[...tr.querySelectorAll('td.field.shelves a')].map(x=>x.textContent.trim());
+const s=['read','currently-reading','to-read'].find(x=>sh.includes(x))||'';
+const au=g('td.field.author a');const d=g('td.field.date_read .date_read_value');
+all[id]={t:(a.getAttribute('title')||a.textContent).trim(),a:au?au.textContent.trim():'',c:c,s:s,r:tr.querySelectorAll('td.field.rating .staticStar.p10').length,d:d?d.textContent.trim():''};
+});
+localStorage.setItem(k,JSON.stringify(all));
+copy(JSON.stringify(Object.values(all)));
+console.log(Object.keys(all).length+' libri copiati negli appunti');
+})()`;
+
+function grNorm(t) {
+  return String(t || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
+    .replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9]+/g, ' ').trim();
+}
+function grKeys(t) {
+  const full = grNorm(t);
+  const short = grNorm(String(t || '').replace(/\(.*?\)/g, '').split(/[:–—]| - /)[0]);
+  return [...new Set([full, short].filter(k => k.length >= 4))];
+}
+function grLastName(a) {
+  const parts = grNorm(String(a || '').split(',')[0]).split(' ').filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : '';
+}
+function grDateToIso(d) {
+  const t = Date.parse(d);
+  if (isNaN(t)) return null;
+  const x = new Date(t);
+  return `${x.getFullYear()}-${String(x.getMonth()+1).padStart(2,'0')}-${String(x.getDate()).padStart(2,'0')}`;
+}
+
+document.getElementById('btn-sync-gr').addEventListener('click', () => {
+  $('user-menu').style.display = 'none';
+  $('gr-result').textContent = '';
+  openModal('modal-sync-gr');
+});
+document.getElementById('gr-copy-script').addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(GR_SCRIPT); toast('✓ Script copiato'); }
+  catch(e) { toast('Copia non riuscita'); }
+});
+document.getElementById('gr-sync-go').addEventListener('click', async () => {
+  const out = $('gr-result');
+  let rows;
+  try { rows = JSON.parse($('gr-paste').value.trim()); if (!Array.isArray(rows)) throw 0; }
+  catch(e) { out.textContent = 'Elenco non valido: incolla il testo copiato dallo script.'; return; }
+
+  // indice dei libri di Teca per chiave di titolo
+  const idx = new Map();
+  libriItems.forEach(b => grKeys(b.title).forEach(k => { if (!idx.has(k)) idx.set(k, []); idx.get(k).push(b); }));
+  const statusMap = { 'read':'letto', 'to-read':'da_leggere', 'currently-reading':'in_lettura' };
+  const btn = $('gr-sync-go'); btn.disabled = true; btn.textContent = 'Sincronizzo…';
+
+  let nCover = 0, nStatus = 0, nRating = 0, matched = 0; const unmatched = []; const used = new Set();
+  for (const r of rows) {
+    let cands = [];
+    for (const k of grKeys(r.t)) { (idx.get(k) || []).forEach(b => { if (!cands.includes(b)) cands.push(b); }); }
+    const ln = grLastName(r.a);
+    let book = cands.find(b => ln && grNorm((b.authors||[]).join(' ')).includes(ln)) || (cands.length === 1 && (!ln || !(cands[0].authors||[]).length) ? cands[0] : null);
+    if (!book || used.has(book.id)) { if (!book) unmatched.push(r.t); continue; }
+    used.add(book.id); matched++;
+
+    const upd = {};
+    const cur = book.cover || book.poster || '';
+    if (r.c && !String(cur).startsWith('data:')) {
+      if (!cur) upd.cover = r.c;
+      else if (cur !== r.c && !(await probeCover(hiRes(cur))) && !(await probeCover(cur))) upd.cover = r.c;
+    }
+    const st = statusMap[r.s];
+    if (st && st !== book.status) upd.status = st;
+    if (r.r > 0 && r.r !== book.rating) upd.rating = r.r;
+    if ((upd.status || book.status) === 'letto' && !book.completedAt && r.d) {
+      const iso = grDateToIso(r.d); if (iso) upd.completedAt = iso;
+    }
+    if (Object.keys(upd).length) {
+      try {
+        await saveItem(book.id, 'libro', upd);
+        if (upd.cover) nCover++; if (upd.status) nStatus++; if (upd.rating) nRating++;
+      } catch(e) { console.warn('sync fallita', book.title, e); }
+    }
+    if (matched % 20 === 0) out.textContent = `Elaborati ${matched}…`;
+  }
+  console.log('Goodreads: non abbinati (' + unmatched.length + '):', unmatched);
+  out.innerHTML = `✓ Abbinati <b>${matched}</b> di ${rows.length}. Aggiornati: <b>${nCover}</b> copertine, <b>${nStatus}</b> stati, <b>${nRating}</b> voti. Non abbinati: ${unmatched.length} (elenco in console, F12).`;
+  btn.disabled = false; btn.textContent = 'Sincronizza';
+});
+
 // ═══════════════ FIX MISSING COVERS ═══════════════════════════
 // Carica un'immagine e la accetta solo se sembra una vera copertina (non segnaposto/pixel vuoto)
 function probeCover(url, timeout = 8000) {
@@ -3405,6 +3500,26 @@ renderLibriGrid();
 renderDash();
 renderShelfSidebar();
 </script>
+
+<!-- GOODREADS SYNC MODAL -->
+<div class="modal-bg" id="modal-sync-gr" style="display:none">
+  <div class="modal-box" style="max-width:560px">
+    <div class="modal-hdr">
+      <span class="modal-title">🔄 Sincronizza da Goodreads</span>
+      <button class="btn-close" data-close="modal-sync-gr">✕</button>
+    </div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:12px;font-size:13px;color:var(--text2);line-height:1.6">
+      <div>
+        <strong>1.</strong> Apri la tua lista su Goodreads (<em>My Books</em>) con tutti i libri visibili, es. <code>…/review/list/2487309?per_page=100&amp;page=1</code>, apri la console del browser (F12 → Console) e incolla lo script. Ripeti per ogni pagina (<code>page=2</code>, <code>3</code>, …): lo script accumula i libri e a ogni lancio copia l'elenco completo.
+      </div>
+      <button id="gr-copy-script" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:12px;font-weight:600;background:var(--surface);cursor:pointer">📋 Copia lo script</button>
+      <div><strong>2.</strong> Incolla qui l'elenco copiato dallo script:</div>
+      <textarea id="gr-paste" rows="5" placeholder='[{"t":"…","a":"…","c":"…"}, …]' style="width:100%;font-size:11px;padding:8px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--surface2);color:var(--text)"></textarea>
+      <div id="gr-result" style="min-height:18px"></div>
+      <button id="gr-sync-go" style="padding:9px 18px;background:var(--libreria);color:white;border-radius:var(--r-sm);font-size:13px;font-weight:600;cursor:pointer">Sincronizza</button>
+    </div>
+  </div>
+</div>
 
 <!-- GOODREADS IMPORT MODAL -->
 <div class="modal-bg" id="modal-import" style="display:none">
