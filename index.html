@@ -1180,6 +1180,7 @@ img{display:block;max-width:100%}
           <div class="tag-filter-wrap sidebar-tags" id="libreria-author-filters"></div>
           <div class="shelf-sidebar-hdr" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
             <span class="shelf-sidebar-title">Tag</span>
+            <span class="shelf-edit-toggle" id="tag-edit-toggle">Modifica</span>
           </div>
           <div class="tag-filter-wrap sidebar-tags" id="libreria-tag-filters"></div>
         </aside>
@@ -1510,6 +1511,11 @@ function renderShelfSidebar() {
   }
   listEl.innerHTML = html;
 }
+$('tag-edit-toggle').addEventListener('click', () => {
+  tagEdit.on = !tagEdit.on; tagEdit.pending = '';
+  $('tag-edit-toggle').textContent = tagEdit.on ? 'Fine' : 'Modifica';
+  renderLibriGrid();
+});
 $('shelf-edit-toggle').addEventListener('click', () => {
   shelfEditMode = !shelfEditMode;
   renderShelfSidebar();
@@ -1555,7 +1561,7 @@ function renderTagFilters(ctx) {
   let tags = Object.keys(tagCounts).sort();
   const allTagsN = tags.length;
   const activeTag = ctx === 'cinema' ? cFilter.tag : lFilter.tag;
-  if (ctx === 'libreria' && !sbExpanded.tags && tags.length > 5) {
+  if (ctx === 'libreria' && !sbExpanded.tags && !tagEdit.on && tags.length > 5) {
     tags.sort((a, b) => tagCounts[b] - tagCounts[a] || a.localeCompare(b));
     tags = tags.slice(0, 5);
     if (activeTag && tagCounts[activeTag] && !tags.includes(activeTag)) tags.push(activeTag);
@@ -1567,12 +1573,14 @@ function renderTagFilters(ctx) {
   const active = ctx === 'cinema' ? cFilter.tag : lFilter.tag;
   const label = ctx === 'libreria' ? '' : '<span style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:0.4px;text-transform:uppercase">Tag:</span>';
   el.innerHTML = label +
-    tags.map(t => `<button class="tag-filter-chip${active===t?' on':''}" data-ctx="${ctx}" data-tag="${esc(t)}">${esc(t)} <span style="opacity:.6">${tagCounts[t]}</span></button>`).join('') +
+    tags.map(t => `<button class="tag-filter-chip${active===t?' on':''}" data-ctx="${ctx}" data-tag="${esc(t)}">${esc(t)} <span style="opacity:.6">${tagCounts[t]}</span></button>` +
+      (ctx === 'libreria' && tagEdit.on ? `<button class="tag-del" data-tag="${esc(t)}" style="font-size:11px;font-weight:700;color:var(--danger);background:none;border:none;cursor:pointer;padding:0 4px">${tagEdit.pending === t ? 'Elimina da tutti i libri? Sì' : '✕'}</button>` : '')).join('') +
     (ctx === 'libreria' && allTagsN > 5 ? `<button class="sb-more" data-more="tags" style="width:100%;text-align:left">${sbExpanded.tags ? 'Mostra meno' : 'Mostra tutti (' + allTagsN + ')'}</button>` : '');
 }
 
 // ── Autori nella barra laterale della Libreria (primi 5, poi "Mostra tutti")
 const sbExpanded = { tags: false, authors: false };
+const tagEdit = { on: false, pending: '' };
 function renderAuthorFilters() {
   const el = $('libreria-author-filters');
   if (!el) return;
@@ -1589,7 +1597,21 @@ function renderAuthorFilters() {
   el.innerHTML = (sbExpanded.authors ? `<div class="sb-scroll" style="display:flex;flex-wrap:wrap;gap:6px">${chips}</div>` : chips) +
     (total > 5 ? `<button class="sb-more" data-more="authors" style="width:100%;text-align:left">${sbExpanded.authors ? 'Mostra meno' : 'Mostra tutti (' + total + ')'}</button>` : '');
 }
-document.addEventListener('click', e => {
+document.addEventListener('click', async e => {
+  const del = e.target.closest('.tag-del');
+  if (del) {
+    const t = del.dataset.tag;
+    if (tagEdit.pending !== t) { tagEdit.pending = t; renderLibriGrid(); return; }
+    tagEdit.pending = '';
+    const hit = libriItems.filter(b => (b.tags || []).includes(t));
+    try {
+      for (const b of hit) await saveItem(b.id, 'libro', { tags: (b.tags || []).filter(x => x !== t) });
+      if (lFilter.tag === t) lFilter.tag = '';
+      toast(`✓ Tag "${t}" eliminato da ${hit.length} libri`);
+    } catch(err) { toast('Errore eliminazione tag'); }
+    renderLibriGrid();
+    return;
+  }
   const more = e.target.closest('.sb-more');
   if (more) { sbExpanded[more.dataset.more] = !sbExpanded[more.dataset.more]; renderLibriGrid(); return; }
   const ch = e.target.closest('.author-chip');
