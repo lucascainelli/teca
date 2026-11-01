@@ -3554,7 +3554,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
   // indice dei libri di Teca per chiave di titolo
   const idx = new Map();
   libriItems.forEach(b => grKeys(b.title).forEach(k => { if (!idx.has(k)) idx.set(k, []); idx.get(k).push(b); }));
-  const statusMap = { 'read':'letto', 'to-read':'da_leggere', 'currently-reading':'in_lettura', 'archivio':'archivio' };
+  const statusMap = { 'read':'letto', 'to-read':'da_leggere', 'currently-reading':'in_lettura', 'archivio':'archivio', 'vorrei_leggere':'vorrei_leggere' };
   // formato: "scaffale" oppure "scaffale=nome del tag" (più scaffali possono confluire nello stesso tag)
   const grTags = ($('gr-tags').value || '').split(',').map(x => x.trim()).filter(Boolean).map(x => {
     const i = x.indexOf('=');
@@ -3588,7 +3588,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
     if (r.p && book.supporto !== r.p) { upd.supporto = r.p; nSup++; }
     if (r.f && !book.isFav) { upd.isFav = true; nFav++; }
     const st = statusMap[r.s];
-    if (st && st !== book.status && (st !== 'archivio' || book.status === 'da_leggere')) upd.status = st;
+    if (st && st !== book.status && (st !== 'archivio' || book.status === 'da_leggere') && (st !== 'vorrei_leggere' || ['da_leggere', 'archivio'].includes(book.status))) upd.status = st;
     if (r.r > 0 && r.r !== book.rating) upd.rating = r.r;
     if ((upd.status || book.status) === 'letto' && !book.completedAt && r.d) {
       const iso = grDateToIso(r.d); if (iso) upd.completedAt = iso;
