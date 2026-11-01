@@ -3325,9 +3325,9 @@ document.querySelectorAll('tr.bookalike').forEach(tr=>{
 const g=q=>tr.querySelector(q);const a=g('td.field.title a');const id=(((a&&a.href)||'').match(/show\/(\d+)/)||[])[1];if(!id)return;
 const img=g('td.field.cover img');let c=((img&&img.src)||'').replace(/\._S[XY]\d+_/,'');if(/nophoto/.test(c))c='';
 const sh=[...tr.querySelectorAll('td.field.shelves a')].map(x=>x.textContent.trim());
-const s=['read','currently-reading','to-read'].find(x=>sh.includes(x))||'';
+const s=['read','currently-reading','to-read'].find(x=>sh.includes(x))||'';const h=sh.filter(x=>!['read','currently-reading','to-read'].includes(x));
 const au=g('td.field.author a');const d=g('td.field.date_read .date_read_value');
-all[id]={t:(a.getAttribute('title')||a.textContent).trim(),a:au?au.textContent.trim():'',c:c,s:s,r:tr.querySelectorAll('td.field.rating .staticStar.p10').length,d:d?d.textContent.trim():''};
+all[id]={t:(a.getAttribute('title')||a.textContent).trim(),a:au?au.textContent.trim():'',c:c,s:s,h:h,r:tr.querySelectorAll('td.field.rating .staticStar.p10').length,d:d?d.textContent.trim():''};
 });
 localStorage.setItem(k,JSON.stringify(all));
 const out=JSON.stringify(Object.values(all));
@@ -3376,7 +3376,9 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
   const idx = new Map();
   libriItems.forEach(b => grKeys(b.title).forEach(k => { if (!idx.has(k)) idx.set(k, []); idx.get(k).push(b); }));
   const statusMap = { 'read':'letto', 'to-read':'da_leggere', 'currently-reading':'in_lettura' };
+  const grTags = ($('gr-tags').value || '').split(',').map(x => x.trim()).filter(Boolean);
   const btn = $('gr-sync-go'); btn.disabled = true; btn.textContent = 'Sincronizzo…';
+  let nTags = 0;
 
   let nCover = 0, nStatus = 0, nRating = 0, matched = 0; const unmatched = []; const used = new Set();
   for (const r of rows) {
@@ -3399,16 +3401,22 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
     if ((upd.status || book.status) === 'letto' && !book.completedAt && r.d) {
       const iso = grDateToIso(r.d); if (iso) upd.completedAt = iso;
     }
+    if (grTags.length && Array.isArray(r.h)) {
+      const have = book.tags || [];
+      const add = grTags.filter(sl => r.h.includes(sl)).map(sl => sl.replace(/-/g, ' ')).filter(t => !have.includes(t));
+      if (add.length) { upd.tags = [...have, ...add]; }
+    }
     if (Object.keys(upd).length) {
       try {
         await saveItem(book.id, 'libro', upd);
+        if (upd.tags) nTags++;
         if (upd.cover) nCover++; if (upd.status) nStatus++; if (upd.rating) nRating++;
       } catch(e) { console.warn('sync fallita', book.title, e); }
     }
     if (matched % 20 === 0) out.textContent = `Elaborati ${matched}…`;
   }
   console.log('Goodreads: non abbinati (' + unmatched.length + '):', unmatched);
-  out.innerHTML = `✓ Abbinati <b>${matched}</b> di ${rows.length}. Aggiornati: <b>${nCover}</b> copertine, <b>${nStatus}</b> stati, <b>${nRating}</b> voti. Non abbinati: ${unmatched.length} (elenco in console, F12).`;
+  out.innerHTML = `✓ Abbinati <b>${matched}</b> di ${rows.length}. Aggiornati: <b>${nCover}</b> copertine, <b>${nStatus}</b> stati, <b>${nRating}</b> voti, <b>${nTags}</b> libri con tag. Non abbinati: ${unmatched.length} (elenco in console, F12).`;
   btn.disabled = false; btn.textContent = 'Sincronizza';
 });
 
@@ -3518,6 +3526,8 @@ renderShelfSidebar();
       <button id="gr-copy-script" style="padding:8px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);font-size:12px;font-weight:600;background:var(--surface);cursor:pointer">📋 Copia lo script</button>
       <div><strong>2.</strong> Incolla qui l'elenco copiato dallo script:</div>
       <textarea id="gr-paste" rows="5" placeholder='[{"t":"…","a":"…","c":"…"}, …]' style="width:100%;font-size:11px;padding:8px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--surface2);color:var(--text)"></textarea>
+      <div><strong>3.</strong> (facoltativo) Scaffali Goodreads da importare come tag, separati da virgola:</div>
+      <input id="gr-tags" placeholder="es. la-biblioteca-di-libero" style="width:100%;font-size:12px;padding:8px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--surface2);color:var(--text)">
       <div id="gr-result" style="min-height:18px"></div>
       <button id="gr-sync-go" style="padding:9px 18px;background:var(--libreria);color:white;border-radius:var(--r-sm);font-size:13px;font-weight:600;cursor:pointer">Sincronizza</button>
     </div>
