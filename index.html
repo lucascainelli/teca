@@ -1235,6 +1235,8 @@ img{display:block;max-width:100%}
           <div class="field-label">URL Copertina</div>
           <input type="url" id="man-cover" class="field-select" placeholder="https://...">
           <button id="man-cover-search" style="margin-top:5px;width:100%;font-size:11px;padding:6px 8px;border-radius:var(--r-xs);border:1.5px solid var(--border);background:var(--accent-bg);color:var(--accent);cursor:pointer;font-weight:600">🖼 Cerca copertine</button>
+          <button id="man-cover-upload" type="button" style="margin-top:5px;width:100%;font-size:11px;padding:6px 8px;border-radius:var(--r-xs);border:1.5px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-weight:600;white-space:nowrap">📁 Carica immagine</button>
+          <input type="file" id="man-cover-file" accept="image/*" style="display:none">
           <div id="man-cover-picker" style="display:none;margin-top:6px"></div>
         </div>
         <div>
@@ -1918,6 +1920,8 @@ function openDetail(item, ctx) {
         <input type="url" id="d-cover-url" placeholder="URL copertina..." value="${esc(src)}"
           style="margin-top:8px;width:100%;font-size:11px;padding:5px 8px;border-radius:var(--r-xs);border:1.5px solid var(--border);color:var(--text2);background:var(--surface2);word-break:break-all">
         <button id="d-cover-apply" style="margin-top:5px;width:100%;font-size:11px;padding:6px 8px;border-radius:var(--r-xs);border:1.5px solid var(--border);background:var(--surface);color:var(--text2);cursor:pointer;white-space:nowrap">Applica copertina</button>
+        <button id="d-cover-upload" style="margin-top:5px;width:100%;font-size:11px;padding:6px 8px;border-radius:var(--r-xs);border:1.5px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-weight:600;white-space:nowrap">📁 Carica immagine</button>
+        <input type="file" id="d-cover-file" accept="image/*" style="display:none">
         ${isBook ? `<button id="d-cover-search" style="margin-top:5px;width:100%;font-size:11px;padding:6px 8px;border-radius:var(--r-xs);border:1.5px solid var(--border);background:var(--accent-bg);color:var(--accent);cursor:pointer;font-weight:600;white-space:nowrap">🖼 Cerca edizioni</button>
         <div id="d-cover-picker" style="display:none;margin-top:8px;display:none"></div>` : ''}
 
@@ -2171,6 +2175,28 @@ function openDetail(item, ctx) {
           if (ph) ph.style.display = 'none';
           toast('✓ Copertina aggiornata');
         } catch(e) { toast('Errore salvataggio'); }
+      });
+    }
+
+    // Carica immagine dal dispositivo
+    const coverUpBtn = document.getElementById('d-cover-upload');
+    const coverFile  = document.getElementById('d-cover-file');
+    if (coverUpBtn && coverFile) {
+      coverUpBtn.addEventListener('click', () => coverFile.click());
+      coverFile.addEventListener('change', async () => {
+        const f = coverFile.files && coverFile.files[0];
+        if (!f) return;
+        try {
+          const data = await imageToDataUrl(f);
+          const field = detailCtx === 'libro' ? 'cover' : 'poster';
+          await saveItem(detailItem.id, detailCtx, { [field]: data });
+          const img = document.getElementById('d-cover-img');
+          if (img) { img.removeAttribute('data-hi'); img.src = data; img.style.display = 'block'; }
+          const ph = document.getElementById('d-cover-ph');
+          if (ph) ph.style.display = 'none';
+          toast('✓ Copertina caricata');
+        } catch(e) { toast('Errore caricamento immagine'); }
+        coverFile.value = '';
       });
     }
 
@@ -2627,6 +2653,15 @@ document.getElementById('man-submit').addEventListener('click', async () => {
   btn.disabled = false; btn.textContent = 'Aggiungi';
 });
 
+document.getElementById('man-cover-upload').addEventListener('click', () => document.getElementById('man-cover-file').click());
+document.getElementById('man-cover-file').addEventListener('change', async (e) => {
+  const f = e.target.files && e.target.files[0];
+  if (!f) return;
+  try { $('man-cover').value = await imageToDataUrl(f); toast('✓ Immagine pronta'); }
+  catch(err) { toast('Errore caricamento immagine'); }
+  e.target.value = '';
+});
+
 document.getElementById('man-cover-search').addEventListener('click', async () => {
   const title  = ($('man-title').value || '').trim();
   const author = ($('man-author').value || '').trim();
@@ -2978,6 +3013,25 @@ window.upgradeCover = function(img) {
     if (p.naturalWidth > img.naturalWidth * 1.15 && Math.abs(r1 / r0 - 1) < 0.08) img.src = p.src;
   };
   p.src = hi;
+};
+// Ridimensiona un'immagine scelta dal dispositivo e la restituisce come data URL JPEG (max 500px di larghezza)
+window.imageToDataUrl = function(file) {
+  return new Promise((resolve, reject) => {
+    const fr = new FileReader();
+    fr.onerror = () => reject(new Error('lettura file'));
+    fr.onload = () => {
+      const im = new Image();
+      im.onerror = () => reject(new Error('immagine non valida'));
+      im.onload = () => {
+        const w = Math.min(500, im.naturalWidth), h = Math.round(im.naturalHeight * w / im.naturalWidth);
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const g = c.getContext('2d'); g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.drawImage(im, 0, 0, w, h);
+        resolve(c.toDataURL('image/jpeg', 0.85));
+      };
+      im.src = fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
 };
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function statusLabel(s) {
