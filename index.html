@@ -1833,7 +1833,7 @@ function cardHTML(item, ctx) {
   return `<div class="item-card" data-id="${item.id}" data-ctx="${ctx}">
     <div class="item-poster-wrap">
       ${src
-        ? `<img class="item-poster-img" src="${hiRes(src)}" data-o="${esc(src)}" alt="${esc(item.title)}" loading="lazy" onerror="if(this.dataset.o&&!this.dataset.t){this.dataset.t=1;this.src=this.dataset.o;return}this.style.display='none';this.nextSibling.style.display='flex'">`
+        ? `<img class="item-poster-img" src="${esc(src)}" data-hi="${esc(hiRes(src))}" onload="upgradeCover(this)" alt="${esc(item.title)}" loading="lazy" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`
         : ''}
       <div class="item-poster-ph" style="${src ? 'display:none' : ''}">${esc(item.title[0]||'?')}</div>
       ${item.isFav ? '<div class="item-fav-badge">⭐</div>' : ''}
@@ -1887,7 +1887,7 @@ function openDetail(item, ctx) {
     <div class="detail-grid">
       <div class="detail-poster-col">
         ${src
-          ? `<img class="detail-poster-img" id="d-cover-img" src="${hiRes(src)}" data-o="${esc(src)}" alt="${esc(detailItem.title)}" onerror="if(this.dataset.o&&!this.dataset.t){this.dataset.t=1;this.src=this.dataset.o;return}this.style.display='none';this.nextSibling.style.display='flex'">
+          ? `<img class="detail-poster-img" id="d-cover-img" src="${esc(src)}" data-hi="${esc(hiRes(src))}" onload="upgradeCover(this)" alt="${esc(detailItem.title)}" onerror="this.style.display='none';this.nextSibling.style.display='flex'">
              <div class="detail-poster-ph" style="display:none">${esc(detailItem.title[0]||'?')}</div>`
           : `<div class="detail-poster-ph" id="d-cover-ph">${esc(detailItem.title[0]||'?')}</div>`}
         <input type="url" id="d-cover-url" placeholder="URL copertina..." value="${esc(src)}"
@@ -2940,6 +2940,20 @@ function hiRes(u) {
   }
   return u;
 }
+// Passa alla versione più grande solo se è una vera copertina (più larga e con le stesse proporzioni):
+// Google restituisce un segnaposto "image not available" per molti libri
+window.upgradeCover = function(img) {
+  const hi = img.dataset.hi;
+  if (!hi || img.dataset.u || hi === img.src) return;
+  img.dataset.u = '1';
+  const p = new Image();
+  p.onload = () => {
+    if (!img.naturalHeight || !p.naturalHeight) return;
+    const r0 = img.naturalWidth / img.naturalHeight, r1 = p.naturalWidth / p.naturalHeight;
+    if (p.naturalWidth > img.naturalWidth * 1.15 && Math.abs(r1 / r0 - 1) < 0.08) img.src = p.src;
+  };
+  p.src = hi;
+};
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function statusLabel(s) {
   return { visto:'Visto', da_vedere:'Da vedere', in_visione:'▶ In visione',
