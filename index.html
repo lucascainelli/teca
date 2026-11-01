@@ -968,6 +968,58 @@ img{display:block;max-width:100%}
   .libreria-layout{flex-direction:column}
   .shelf-sidebar{width:100%;position:static;max-height:none;overflow-y:visible}
 }
+
+/* ===== RESTYLING LIBRERIA ===== */
+body{background:
+  radial-gradient(1100px 520px at 8% -8%, #E6F4EA 0%, transparent 62%),
+  radial-gradient(900px 480px at 100% 0%, #ECEFFF 0%, transparent 58%),
+  var(--bg);background-attachment:fixed}
+.app-header{background:rgba(255,255,255,.82);backdrop-filter:saturate(1.4) blur(14px);-webkit-backdrop-filter:saturate(1.4) blur(14px);box-shadow:0 1px 0 var(--border),0 8px 24px rgba(17,17,16,.04)}
+.nav-tab{font-weight:600}
+
+#tab-libreria .filter-bar{
+  background:var(--surface);padding:10px 12px;border-radius:18px;
+  box-shadow:var(--shadow);border:1px solid rgba(17,17,16,.05);gap:10px;margin-bottom:22px;
+}
+#tab-libreria .filter-chips{background:var(--surface2);box-shadow:none;border-radius:999px;padding:4px;gap:3px;flex-wrap:wrap}
+#tab-libreria .chip{border-radius:999px;padding:6px 12px;font-weight:600}
+#tab-libreria .chip.on{background:linear-gradient(135deg,#1A6E3C,#2E9A59);color:#fff;box-shadow:0 3px 10px rgba(26,110,60,.35)}
+.chip-n{font-size:11px;font-weight:700;padding:1px 7px;border-radius:999px;background:rgba(17,17,16,.07);color:var(--text2);line-height:1.5}
+.chip.on .chip-n{background:rgba(255,255,255,.25);color:#fff}
+#tab-libreria .search-box,#tab-libreria .sort-sel{background-color:var(--surface2);border-color:transparent;box-shadow:none;border-radius:999px;padding-left:14px}
+#tab-libreria .search-box:focus{border-color:var(--libreria);background-color:#fff;box-shadow:0 0 0 3px rgba(26,110,60,.14)}
+#tab-libreria .btn-add-item{background:linear-gradient(135deg,#1A6E3C,#2E9A59);border-radius:999px;padding:9px 18px;box-shadow:0 6px 16px rgba(26,110,60,.3)}
+#libreria-view.chip,#libreria-acq.chip{background:var(--surface2)}
+#libreria-view.chip.on,#libreria-acq.chip.on{background:linear-gradient(135deg,#1A6E3C,#2E9A59)}
+
+.shelf-sidebar{border:1px solid rgba(17,17,16,.05);border-radius:22px;padding:20px 18px;box-shadow:var(--shadow)}
+.shelf-sidebar-title{display:flex;align-items:center;gap:8px;font-size:11.5px;font-weight:800;letter-spacing:.14em;color:var(--text)}
+.shelf-sidebar-title::before{content:'';width:4px;height:14px;border-radius:2px;background:var(--libreria)}
+.shelf-sidebar .shelf-sidebar-hdr[style*="border-top"]{border-top:1px dashed var(--border)!important}
+.shelf-sidebar::-webkit-scrollbar{width:6px}
+.shelf-sidebar::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.tag-filter-chip,.author-chip{transition:transform .12s,box-shadow .12s,background .12s}
+.tag-filter-chip:hover,.author-chip:hover{transform:translateY(-1px);box-shadow:0 3px 8px rgba(17,17,16,.12)}
+
+.grid-section{
+  --sec:#8A8A85;position:relative;padding:2px 0 10px 16px;border-bottom:none;
+  font-family:'Cormorant Garamond',serif;font-size:26px;font-weight:600;letter-spacing:-.3px;color:var(--text);
+  margin:30px 0 6px;
+}
+.grid-section:first-child{margin-top:4px}
+.grid-section::before{content:'';position:absolute;left:0;top:6px;bottom:14px;width:5px;border-radius:3px;background:var(--sec)}
+.grid-section span{font-family:'DM Sans',sans-serif;font-size:12.5px;font-weight:700;color:var(--sec);background:#fff;border:1.5px solid var(--sec);padding:1px 10px}
+.grid-section.sec-in-lettura{--sec:#2563EB}
+.grid-section.sec-da-leggere{--sec:#B45309}
+.grid-section.sec-vorrei-leggere{--sec:#7C3AED}
+.grid-section.sec-letti{--sec:#1A6E3C}
+.grid-section.sec-archivio{--sec:#6B6B66}
+
+.item-card{border-radius:16px;box-shadow:0 2px 12px rgba(17,17,16,.07)}
+.item-card:hover{transform:translateY(-6px);box-shadow:0 14px 34px rgba(17,17,16,.16)}
+.items-grid.covers-only .item-card:hover{transform:translateY(-6px) scale(1.03);box-shadow:none}
+.items-grid.covers-only .item-poster-wrap{border-radius:5px;box-shadow:0 8px 20px rgba(17,17,16,.28),0 1px 3px rgba(17,17,16,.25);transition:box-shadow .18s}
+.items-grid.covers-only .item-card:hover .item-poster-wrap{box-shadow:0 18px 38px rgba(17,17,16,.38),0 2px 4px rgba(17,17,16,.25)}
 </style>
 </head>
 <body>
@@ -1605,6 +1657,15 @@ function renderTagFilters(ctx) {
 const sbExpanded = { tags: false, authors: false };
 const tagEdit = { on: false, pending: '' };
 const sbQ = { authors: '', tags: '' };
+function renderStatusCounts() {
+  const n = { all: libriItems.length, fav: libriItems.filter(i => i.isFav).length };
+  libriItems.forEach(i => { n[i.status] = (n[i.status] || 0) + 1; });
+  document.querySelectorAll('#libreria-status-chips .chip').forEach(c => {
+    const k = c.dataset.status;
+    if (!c.dataset.label) c.dataset.label = c.textContent.trim();
+    c.innerHTML = `${esc(c.dataset.label)} <span class="chip-n">${n[k] || 0}</span>`;
+  });
+}
 function renderSupportoFilters() {
   const el = $('libreria-supporto-filters');
   if (!el) return;
@@ -1948,6 +2009,7 @@ function renderLibriGrid() {
   if (lFilter.shelf) items = items.filter(i => (i.shelves||[]).includes(lFilter.shelf));
   if (lFilter.supporto) items = items.filter(i => (i.supporto||'') === lFilter.supporto);
   renderTagFilters('libreria');
+  renderStatusCounts();
   renderSupportoFilters();
   renderAuthorFilters();
   renderShelfSidebar();
@@ -1983,11 +2045,11 @@ function renderLibriGrid() {
       ['In lettura',   items.filter(i => i.status === 'in_lettura')],
       ['Da leggere',   items.filter(i => i.status === 'da_leggere')],
       ['Vorrei leggere', items.filter(i => i.status === 'vorrei_leggere')],
-      ['Altri libri',  items.filter(i => i.status !== 'in_lettura' && i.status !== 'da_leggere' && i.status !== 'vorrei_leggere' && i.status !== 'archivio')],
+      ['Letti',  items.filter(i => i.status !== 'in_lettura' && i.status !== 'da_leggere' && i.status !== 'vorrei_leggere' && i.status !== 'archivio')],
       ['Archivio',     items.filter(i => i.status === 'archivio')]
     ];
     libriHTML = groups.filter(g => g[1].length).map(g =>
-      `<div class="grid-section">${g[0]} <span>${g[1].length}</span></div>` + g[1].map(i => cardHTML(i,'libro')).join('')
+      `<div class="grid-section sec-${g[0].toLowerCase().replace(/\s+/g, '-')}">${g[0]} <span>${g[1].length}</span></div>` + g[1].map(i => cardHTML(i,'libro')).join('')
     ).join('');
   } else {
     libriHTML = items.map(i => cardHTML(i,'libro')).join('');
