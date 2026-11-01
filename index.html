@@ -524,6 +524,7 @@ img{display:block;max-width:100%}
 }
 .s-visto,.s-letto{background:var(--libreria-bg);color:var(--libreria)}
 .s-da_vedere,.s-da_leggere{background:var(--cinema-bg);color:var(--cinema)}
+.s-archivio{background:var(--surface2);color:var(--text3)}
 .s-in_visione,.s-in_lettura{background:#DBEAFE;color:var(--info)}
 .item-stars{font-size:10px;color:var(--gold);letter-spacing:-0.5px;margin-top:3px}
 
@@ -1208,6 +1209,7 @@ img{display:block;max-width:100%}
               <button class="chip" data-status="letto">✓ Letti</button>
               <button class="chip" data-status="in_lettura">📖 In lettura</button>
               <button class="chip" data-status="da_leggere">Da leggere</button>
+              <button class="chip" data-status="archivio">🗄 Archivio</button>
               <button class="chip" data-status="fav">★</button>
             </div>
             <select class="sort-sel" id="libreria-sort">
@@ -1978,7 +1980,8 @@ function renderLibriGrid() {
     const groups = [
       ['In lettura',   items.filter(i => i.status === 'in_lettura')],
       ['Da leggere',   items.filter(i => i.status === 'da_leggere')],
-      ['Altri libri',  items.filter(i => i.status !== 'in_lettura' && i.status !== 'da_leggere')]
+      ['Altri libri',  items.filter(i => i.status !== 'in_lettura' && i.status !== 'da_leggere' && i.status !== 'archivio')],
+      ['Archivio',     items.filter(i => i.status === 'archivio')]
     ];
     libriHTML = groups.filter(g => g[1].length).map(g =>
       `<div class="grid-section">${g[0]} <span>${g[1].length}</span></div>` + g[1].map(i => cardHTML(i,'libro')).join('')
@@ -2062,7 +2065,7 @@ function openDetail(item, ctx) {
   const isBook = ctx === 'libro';
   const src    = detailItem.poster || detailItem.cover || '';
   const statusOpts = isBook
-    ? ['da_leggere','in_lettura','letto']
+    ? ['da_leggere','in_lettura','letto','archivio']
     : ['da_vedere','in_visione','visto'];
   let meta = isBook
     ? [detailItem.authors?.join(', '), detailItem.publisher, detailItem.year, detailItem.pageCount ? detailItem.pageCount+' pag.' : ''].filter(Boolean).join(' · ')
@@ -3224,7 +3227,7 @@ window.imageToDataUrl = function(file) {
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function statusLabel(s) {
   return { visto:'Visto', da_vedere:'Da vedere', in_visione:'▶ In visione',
-           letto:'Letto', da_leggere:'Da leggere', in_lettura:'📖 In lettura' }[s] || s;
+           letto:'Letto', da_leggere:'Da leggere', in_lettura:'📖 In lettura', archivio:'🗄 Archivio' }[s] || s;
 }
 function inYear(ts, y) {
   if (!ts) return false;
@@ -3329,7 +3332,7 @@ function parseGoodreadsCSV(text) {
   const idx = {};
   header.forEach((h, i) => { idx[h.trim()] = i; });
 
-  const statusMap = { 'read': 'letto', 'to-read': 'da_leggere', 'currently-reading': 'in_lettura' };
+  const statusMap = { 'read': 'letto', 'to-read': 'da_leggere', 'currently-reading': 'in_lettura', 'archivio': 'archivio' };
 
   return lines.slice(1).filter(l => l.trim()).map(line => {
     const cols = parseCSVLine(line);
@@ -3548,7 +3551,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
   // indice dei libri di Teca per chiave di titolo
   const idx = new Map();
   libriItems.forEach(b => grKeys(b.title).forEach(k => { if (!idx.has(k)) idx.set(k, []); idx.get(k).push(b); }));
-  const statusMap = { 'read':'letto', 'to-read':'da_leggere', 'currently-reading':'in_lettura' };
+  const statusMap = { 'read':'letto', 'to-read':'da_leggere', 'currently-reading':'in_lettura', 'archivio':'archivio' };
   // formato: "scaffale" oppure "scaffale=nome del tag" (più scaffali possono confluire nello stesso tag)
   const grTags = ($('gr-tags').value || '').split(',').map(x => x.trim()).filter(Boolean).map(x => {
     const i = x.indexOf('=');
@@ -3582,7 +3585,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
     if (r.p && book.supporto !== r.p) { upd.supporto = r.p; nSup++; }
     if (r.f && !book.isFav) { upd.isFav = true; nFav++; }
     const st = statusMap[r.s];
-    if (st && st !== book.status) upd.status = st;
+    if (st && st !== book.status && (st !== 'archivio' || book.status === 'da_leggere')) upd.status = st;
     if (r.r > 0 && r.r !== book.rating) upd.rating = r.r;
     if ((upd.status || book.status) === 'letto' && !book.completedAt && r.d) {
       const iso = grDateToIso(r.d); if (iso) upd.completedAt = iso;
