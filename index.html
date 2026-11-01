@@ -3560,7 +3560,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
   }).filter(Boolean);
   let nShelves = 0;
   const btn = $('gr-sync-go'); btn.disabled = true; btn.textContent = 'Sincronizzo…';
-  let nTags = 0, nSup = 0;
+  let nTags = 0, nSup = 0, nFav = 0;
   const grForce = $('gr-force').checked;
 
   let nCover = 0, nStatus = 0, nRating = 0, matched = 0; const unmatched = []; const used = new Set();
@@ -3580,6 +3580,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
       else if (cur !== r.c && !(await probeCover(hiRes(cur))) && !(await probeCover(cur))) upd.cover = r.c;
     }
     if (r.p && book.supporto !== r.p) { upd.supporto = r.p; nSup++; }
+    if (r.f && !book.isFav) { upd.isFav = true; nFav++; }
     const st = statusMap[r.s];
     if (st && st !== book.status) upd.status = st;
     if (r.r > 0 && r.r !== book.rating) upd.rating = r.r;
@@ -3607,7 +3608,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
     if (matched % 20 === 0) out.textContent = `Elaborati ${matched}…`;
   }
   console.log('Goodreads: non abbinati (' + unmatched.length + '):', unmatched);
-  out.innerHTML = `✓ Abbinati <b>${matched}</b> di ${rows.length}. Aggiornati: <b>${nCover}</b> copertine, <b>${nStatus}</b> stati, <b>${nRating}</b> voti, <b>${nTags}</b> libri con tag, <b>${nSup}</b> supporti, <b>${nShelves}</b> libri messi negli scaffali. Non abbinati: ${unmatched.length} (elenco in console, F12).`;
+  out.innerHTML = `✓ Abbinati <b>${matched}</b> di ${rows.length}. Aggiornati: <b>${nCover}</b> copertine, <b>${nStatus}</b> stati, <b>${nRating}</b> voti, <b>${nTags}</b> libri con tag, <b>${nSup}</b> supporti, <b>${nShelves}</b> libri messi negli scaffali, <b>${nFav}</b> nuovi preferiti. Non abbinati: ${unmatched.length} (elenco in console, F12).`;
   btn.disabled = false; btn.textContent = 'Sincronizza';
 });
 
