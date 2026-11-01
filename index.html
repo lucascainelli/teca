@@ -847,6 +847,16 @@ img{display:block;max-width:100%}
   overflow-y:auto;
 }
 .tag-filter-wrap.sidebar-tags{margin-bottom:0}
+.author-chip{
+  padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:700;
+  background:var(--surface2);color:var(--text2);border:1.5px solid transparent;cursor:pointer;
+  transition:all 0.12s;text-align:left;
+}
+.author-chip:hover{background:var(--text2);color:white}
+.author-chip.on{background:var(--text);color:white}
+.sb-more{margin-top:8px;font-size:11.5px;font-weight:600;color:var(--text3);cursor:pointer;background:none;border:none;padding:0}
+.sb-more:hover{color:var(--text)}
+.sb-scroll{max-height:260px;overflow-y:auto}
 .shelf-sidebar-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:10px}
 .shelf-sidebar-title{font-size:11px;font-weight:700;letter-spacing:0.6px;text-transform:uppercase;color:var(--text3)}
 .shelf-edit-toggle{font-size:11px;font-weight:600;color:var(--libreria);cursor:pointer}
@@ -1164,6 +1174,10 @@ img{display:block;max-width:100%}
             <input type="text" class="shelf-add-input" id="shelf-add-input" placeholder="Nuovo scaffale…" maxlength="40">
             <button class="shelf-add-btn" id="shelf-add-btn">+ Crea</button>
           </div>
+          <div class="shelf-sidebar-hdr" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+            <span class="shelf-sidebar-title">Autori</span>
+          </div>
+          <div class="tag-filter-wrap sidebar-tags" id="libreria-author-filters"></div>
           <div class="shelf-sidebar-hdr" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
             <span class="shelf-sidebar-title">Tag</span>
           </div>
@@ -1538,7 +1552,14 @@ function renderTagFilters(ctx) {
   const items = ctx === 'cinema' ? cinemaItems : libriItems;
   const tagCounts = {};
   items.forEach(i => (i.tags||[]).forEach(t => { tagCounts[t] = (tagCounts[t]||0)+1; }));
-  const tags = Object.keys(tagCounts).sort();
+  let tags = Object.keys(tagCounts).sort();
+  const allTagsN = tags.length;
+  const activeTag = ctx === 'cinema' ? cFilter.tag : lFilter.tag;
+  if (ctx === 'libreria' && !sbExpanded.tags && tags.length > 5) {
+    tags.sort((a, b) => tagCounts[b] - tagCounts[a] || a.localeCompare(b));
+    tags = tags.slice(0, 5);
+    if (activeTag && tagCounts[activeTag] && !tags.includes(activeTag)) tags.push(activeTag);
+  }
   if (!tags.length) {
     el.innerHTML = ctx === 'libreria' ? '<span style="font-size:11.5px;color:var(--text3);font-style:italic">Nessun tag ancora.</span>' : '';
     return;
@@ -1546,8 +1567,38 @@ function renderTagFilters(ctx) {
   const active = ctx === 'cinema' ? cFilter.tag : lFilter.tag;
   const label = ctx === 'libreria' ? '' : '<span style="font-size:11px;color:var(--text3);font-weight:600;letter-spacing:0.4px;text-transform:uppercase">Tag:</span>';
   el.innerHTML = label +
-    tags.map(t => `<button class="tag-filter-chip${active===t?' on':''}" data-ctx="${ctx}" data-tag="${esc(t)}">${esc(t)} <span style="opacity:.6">${tagCounts[t]}</span></button>`).join('');
+    tags.map(t => `<button class="tag-filter-chip${active===t?' on':''}" data-ctx="${ctx}" data-tag="${esc(t)}">${esc(t)} <span style="opacity:.6">${tagCounts[t]}</span></button>`).join('') +
+    (ctx === 'libreria' && allTagsN > 5 ? `<button class="sb-more" data-more="tags" style="width:100%;text-align:left">${sbExpanded.tags ? 'Mostra meno' : 'Mostra tutti (' + allTagsN + ')'}</button>` : '');
 }
+
+// ── Autori nella barra laterale della Libreria (primi 5, poi "Mostra tutti")
+const sbExpanded = { tags: false, authors: false };
+function renderAuthorFilters() {
+  const el = $('libreria-author-filters');
+  if (!el) return;
+  const counts = {};
+  libriItems.forEach(b => { const a = ((b.authors || [])[0] || '').trim(); if (a) counts[a] = (counts[a] || 0) + 1; });
+  let names = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b));
+  const total = names.length;
+  const active = (lFilter.author || '').trim().toLowerCase();
+  if (!total) { el.innerHTML = '<span style="font-size:11.5px;color:var(--text3);font-style:italic">Nessun autore.</span>'; return; }
+  const shown = sbExpanded.authors ? names : names.slice(0, 5);
+  const act = names.find(n => n.toLowerCase() === active);
+  if (act && !shown.includes(act)) shown.push(act);
+  const chips = shown.map(n => `<button class="author-chip${n.toLowerCase() === active ? ' on' : ''}" data-author="${esc(n)}">${esc(n)} <span style="opacity:.6">${counts[n]}</span></button>`).join('');
+  el.innerHTML = (sbExpanded.authors ? `<div class="sb-scroll" style="display:flex;flex-wrap:wrap;gap:6px">${chips}</div>` : chips) +
+    (total > 5 ? `<button class="sb-more" data-more="authors" style="width:100%;text-align:left">${sbExpanded.authors ? 'Mostra meno' : 'Mostra tutti (' + total + ')'}</button>` : '');
+}
+document.addEventListener('click', e => {
+  const more = e.target.closest('.sb-more');
+  if (more) { sbExpanded[more.dataset.more] = !sbExpanded[more.dataset.more]; renderLibriGrid(); return; }
+  const ch = e.target.closest('.author-chip');
+  if (!ch) return;
+  const name = ch.dataset.author;
+  lFilter.author = (lFilter.author || '').trim().toLowerCase() === name.toLowerCase() ? '' : name;
+  $('libreria-author').value = lFilter.author;
+  renderLibriGrid();
+});
 document.addEventListener('click', e => {
   const chip = e.target.closest('.tag-filter-chip');
   if (!chip) return;
@@ -1825,6 +1876,7 @@ function renderLibriGrid() {
   if (lFilter.tag) items = items.filter(i => (i.tags||[]).includes(lFilter.tag));
   if (lFilter.shelf) items = items.filter(i => (i.shelves||[]).includes(lFilter.shelf));
   renderTagFilters('libreria');
+  renderAuthorFilters();
   renderShelfSidebar();
   let libriHTML = '';
   if (lFilter.status === 'all') {
