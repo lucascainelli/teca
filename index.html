@@ -525,6 +525,7 @@ img{display:block;max-width:100%}
 .s-visto,.s-letto{background:var(--libreria-bg);color:var(--libreria)}
 .s-da_vedere,.s-da_leggere{background:var(--cinema-bg);color:var(--cinema)}
 .s-archivio{background:var(--surface2);color:var(--text3)}
+.s-vorrei_leggere{background:#FEF3C7;color:#92400E}
 .s-in_visione,.s-in_lettura{background:#DBEAFE;color:var(--info)}
 .item-stars{font-size:10px;color:var(--gold);letter-spacing:-0.5px;margin-top:3px}
 
@@ -1209,6 +1210,7 @@ img{display:block;max-width:100%}
               <button class="chip" data-status="letto">✓ Letti</button>
               <button class="chip" data-status="in_lettura">📖 In lettura</button>
               <button class="chip" data-status="da_leggere">Da leggere</button>
+              <button class="chip" data-status="vorrei_leggere">Vorrei leggere</button>
               <button class="chip" data-status="archivio">🗄 Archivio</button>
               <button class="chip" data-status="fav">★</button>
             </div>
@@ -1980,7 +1982,8 @@ function renderLibriGrid() {
     const groups = [
       ['In lettura',   items.filter(i => i.status === 'in_lettura')],
       ['Da leggere',   items.filter(i => i.status === 'da_leggere')],
-      ['Altri libri',  items.filter(i => i.status !== 'in_lettura' && i.status !== 'da_leggere' && i.status !== 'archivio')],
+      ['Vorrei leggere', items.filter(i => i.status === 'vorrei_leggere')],
+      ['Altri libri',  items.filter(i => i.status !== 'in_lettura' && i.status !== 'da_leggere' && i.status !== 'vorrei_leggere' && i.status !== 'archivio')],
       ['Archivio',     items.filter(i => i.status === 'archivio')]
     ];
     libriHTML = groups.filter(g => g[1].length).map(g =>
@@ -2065,7 +2068,7 @@ function openDetail(item, ctx) {
   const isBook = ctx === 'libro';
   const src    = detailItem.poster || detailItem.cover || '';
   const statusOpts = isBook
-    ? ['da_leggere','in_lettura','letto','archivio']
+    ? ['da_leggere','vorrei_leggere','in_lettura','letto','archivio']
     : ['da_vedere','in_visione','visto'];
   let meta = isBook
     ? [detailItem.authors?.join(', '), detailItem.publisher, detailItem.year, detailItem.pageCount ? detailItem.pageCount+' pag.' : ''].filter(Boolean).join(' · ')
@@ -3227,7 +3230,7 @@ window.imageToDataUrl = function(file) {
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 function statusLabel(s) {
   return { visto:'Visto', da_vedere:'Da vedere', in_visione:'▶ In visione',
-           letto:'Letto', da_leggere:'Da leggere', in_lettura:'📖 In lettura', archivio:'🗄 Archivio' }[s] || s;
+           letto:'Letto', da_leggere:'Da leggere', in_lettura:'📖 In lettura', vorrei_leggere:'Vorrei leggere', archivio:'🗄 Archivio' }[s] || s;
 }
 function inYear(ts, y) {
   if (!ts) return false;
