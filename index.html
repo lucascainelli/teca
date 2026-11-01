@@ -1657,6 +1657,14 @@ function renderTagFilters(ctx) {
 const sbExpanded = { tags: false, authors: false };
 const tagEdit = { on: false, pending: '' };
 const sbQ = { authors: '', tags: '' };
+// Suggerimenti per il campo Negozio: prima quelli già usati (più frequenti in alto), poi i più comuni
+function shopSuggestions() {
+  const cnt = {};
+  libriItems.forEach(b => { const n = (b.negozio || '').trim(); if (n) cnt[n] = (cnt[n] || 0) + 1; });
+  const used = Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a] || a.localeCompare(b));
+  const common = ['Amazon', 'Libraccio', 'IBS', 'Feltrinelli', 'Mondadori Store', 'Hoepli', 'Kobo', 'Bancarella / usato', 'Libreria di quartiere', 'Regalo'];
+  return [...used, ...common.filter(c => !used.some(u => u.toLowerCase() === c.toLowerCase()))];
+}
 function renderStatusCounts() {
   const n = { all: libriItems.length, fav: libriItems.filter(i => i.isFav).length };
   libriItems.forEach(i => { n[i.status] = (n[i.status] || 0) + 1; });
@@ -2171,7 +2179,8 @@ function openDetail(item, ctx) {
           <input type="date" class="field-select" id="d-acq-date" value="${esc(detailItem.dataAcquisto||'')}" title="Data di acquisto">
           <div style="display:flex;gap:6px;margin-top:6px">
             <input type="number" step="0.01" min="0" class="field-select" id="d-acq-price" placeholder="Prezzo €" value="${detailItem.prezzo!=null?esc(detailItem.prezzo):''}" style="flex:1;min-width:0">
-            <input type="text" class="field-select" id="d-acq-shop" placeholder="Negozio" value="${esc(detailItem.negozio||'')}" style="flex:1;min-width:0">
+            <input type="text" class="field-select" id="d-acq-shop" list="d-shop-list" autocomplete="off" placeholder="Negozio" value="${esc(detailItem.negozio||'')}" style="flex:1;min-width:0">
+            <datalist id="d-shop-list">${shopSuggestions().map(n => `<option value="${esc(n)}">`).join('')}</datalist>
           </div>
         </div>` : ''}
 
