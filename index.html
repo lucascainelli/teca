@@ -1260,6 +1260,7 @@ body{background:
           <div class="tag-filter-wrap sidebar-tags" id="libreria-supporto-filters"></div>
           <div class="shelf-sidebar-hdr" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
             <span class="shelf-sidebar-title">Autori</span>
+            <span class="shelf-edit-toggle" id="author-merge-btn" title="Unisci due scritture dello stesso autore">Unisci</span>
           </div>
           <input type="search" id="sb-author-q" placeholder="Cerca autore…" style="width:100%;margin:0 0 8px;font-size:12px;padding:6px 9px;border:1.5px solid var(--border);border-radius:var(--r-xs);background:var(--surface2);color:var(--text)">
           <div class="tag-filter-wrap sidebar-tags" id="libreria-author-filters"></div>
@@ -3698,6 +3699,42 @@ $('fav-del').addEventListener('click', async () => {
   renderFavAuthors();
 });
 
+
+// ═══════════════ UNISCI AUTORI ═══════════════════════════════
+function mergeBooks(from) {
+  const f = from.trim().toLowerCase();
+  return f ? libriItems.filter(b => (b.authors || []).some(a => a.trim().toLowerCase() === f)) : [];
+}
+function updateMergeInfo() {
+  const n = mergeBooks($('merge-from').value).length;
+  $('merge-info').textContent = $('merge-from').value.trim() ? (n ? `${n} ${n === 1 ? 'libro' : 'libri'} da aggiornare.` : 'Nessun libro con questo autore.') : '';
+}
+$('author-merge-btn').addEventListener('click', () => {
+  const names = [...new Set(libriItems.flatMap(b => b.authors || []).map(a => a.trim()).filter(Boolean))].sort((x, y) => x.localeCompare(y, 'it'));
+  $('merge-list').innerHTML = names.map(n => `<option value="${esc(n)}">`).join('');
+  $('merge-from').value = ''; $('merge-to').value = ''; $('merge-info').textContent = '';
+  openModal('modal-merge');
+});
+$('merge-from').addEventListener('input', updateMergeInfo);
+$('merge-go').addEventListener('click', async () => {
+  const from = $('merge-from').value.trim(), to = $('merge-to').value.trim();
+  if (!from || !to) { $('merge-info').textContent = 'Compila entrambi i campi.'; return; }
+  if (from.toLowerCase() === to.toLowerCase()) { $('merge-info').textContent = 'I due nomi sono uguali.'; return; }
+  const hit = mergeBooks(from);
+  if (!hit.length) { $('merge-info').textContent = 'Nessun libro con questo autore.'; return; }
+  const btn = $('merge-go'); btn.disabled = true;
+  try {
+    for (const b of hit) {
+      const seen = new Set();
+      const authors = (b.authors || []).map(a => a.trim().toLowerCase() === from.toLowerCase() ? to : a).filter(a => { const k = a.trim().toLowerCase(); if (seen.has(k)) return false; seen.add(k); return true; });
+      await saveItem(b.id, 'libro', { authors });
+    }
+    closeModal('modal-merge');
+    toast(`✓ ${hit.length} ${hit.length === 1 ? 'libro aggiornato' : 'libri aggiornati'}`);
+  } catch (e) { $('merge-info').textContent = 'Errore durante il salvataggio.'; }
+  btn.disabled = false;
+});
+
 // ═══════════════ SINCRONIZZA DA GOODREADS ═════════════════════
 const GR_SCRIPT = String.raw`(async()=>{
 const k='teca_gr';let all={};try{all=JSON.parse(localStorage.getItem(k)||'{}')}catch(e){}
@@ -3930,6 +3967,24 @@ renderShelfSidebar();
         <button id="fav-del" type="button" style="display:none;flex:1;padding:9px;border-radius:var(--r-sm);border:1.5px solid var(--border);color:var(--danger);font-weight:600;font-size:13px;cursor:pointer">Rimuovi</button>
         <button id="fav-save" type="button" style="flex:2;padding:9px;border-radius:var(--r-sm);background:var(--libreria);color:#fff;font-weight:600;font-size:13px;cursor:pointer">Salva</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- UNISCI AUTORI -->
+<div class="modal-bg" id="modal-merge" style="display:none">
+  <div class="modal-box" style="max-width:400px">
+    <div class="modal-hdr">
+      <span class="modal-title">Unisci autori</span>
+      <button class="btn-close" data-close="modal-merge">✕</button>
+    </div>
+    <div style="padding:20px;display:flex;flex-direction:column;gap:12px;font-size:13px;color:var(--text2)">
+      <div>Cambia il nome dell'autore in tutti i suoi libri.</div>
+      <input id="merge-from" list="merge-list" autocomplete="off" placeholder="Da: scrittura da correggere" style="width:100%;font-size:14px;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--surface2);color:var(--text)">
+      <input id="merge-to" list="merge-list" autocomplete="off" placeholder="A: scrittura giusta" style="width:100%;font-size:14px;padding:9px 12px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--surface2);color:var(--text)">
+      <datalist id="merge-list"></datalist>
+      <div id="merge-info" style="min-height:18px;font-size:12.5px"></div>
+      <button id="merge-go" type="button" style="padding:9px;border-radius:var(--r-sm);background:var(--libreria);color:#fff;font-weight:600;font-size:13px;cursor:pointer">Unisci</button>
     </div>
   </div>
 </div>
