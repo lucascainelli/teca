@@ -1957,10 +1957,12 @@ function renderLibriGrid() {
         arr.map(b => {
           const src = b.cover || b.poster || '';
           const d = new Date(b.dataAcquisto + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short' });
+          const fIso = b.status === 'letto' ? toDateInputValue(b.completedAt) : '';
+          const fine = fIso ? new Date(fIso + 'T12:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' }) : '';
           return `<div class="acq-row" data-id="${b.id}">
             ${src ? `<img src="${esc(src)}" alt="" loading="lazy">` : '<div class="acq-ph"></div>'}
             <div><div class="acq-t">${esc(b.title)}</div><div class="acq-a">${esc((b.authors || []).join(', '))}</div></div>
-            <div class="acq-meta">${d}${typeof b.prezzo === 'number' ? '<br>' + eur(b.prezzo) : ''}${b.negozio ? '<br>' + esc(b.negozio) : ''}</div>
+            <div class="acq-meta">${d}${typeof b.prezzo === 'number' ? '<br>' + eur(b.prezzo) : ''}${b.negozio ? '<br>' + esc(b.negozio) : ''}${fine ? '<br><span style="color:var(--libreria);font-weight:600">letto ' + fine + '</span>' : ''}</div>
           </div>`;
         }).join('');
     }).join('');
