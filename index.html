@@ -3379,6 +3379,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
   const grTags = ($('gr-tags').value || '').split(',').map(x => x.trim()).filter(Boolean);
   const btn = $('gr-sync-go'); btn.disabled = true; btn.textContent = 'Sincronizzo…';
   let nTags = 0;
+  const grForce = $('gr-force').checked;
 
   let nCover = 0, nStatus = 0, nRating = 0, matched = 0; const unmatched = []; const used = new Set();
   for (const r of rows) {
@@ -3393,6 +3394,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
     const cur = book.cover || book.poster || '';
     if (r.c && !String(cur).startsWith('data:')) {
       if (!cur) upd.cover = r.c;
+      else if (grForce) { if (cur !== r.c) upd.cover = r.c; }
       else if (cur !== r.c && !(await probeCover(hiRes(cur))) && !(await probeCover(cur))) upd.cover = r.c;
     }
     const st = statusMap[r.s];
@@ -3528,6 +3530,7 @@ renderShelfSidebar();
       <textarea id="gr-paste" rows="5" placeholder='[{"t":"…","a":"…","c":"…"}, …]' style="width:100%;font-size:11px;padding:8px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--surface2);color:var(--text)"></textarea>
       <div><strong>3.</strong> (facoltativo) Scaffali Goodreads da importare come tag, separati da virgola:</div>
       <input id="gr-tags" placeholder="es. la-biblioteca-di-libero" style="width:100%;font-size:12px;padding:8px;border:1.5px solid var(--border);border-radius:var(--r-sm);background:var(--surface2);color:var(--text)">
+      <label style="display:flex;gap:8px;align-items:center;font-size:12px"><input type="checkbox" id="gr-force"> Sostituisci sempre le copertine con quelle di Goodreads (per i libri dell'elenco incollato)</label>
       <div id="gr-result" style="min-height:18px"></div>
       <button id="gr-sync-go" style="padding:9px 18px;background:var(--libreria);color:white;border-radius:var(--r-sm);font-size:13px;font-weight:600;cursor:pointer">Sincronizza</button>
     </div>
