@@ -1181,11 +1181,13 @@ img{display:block;max-width:100%}
           <div class="shelf-sidebar-hdr" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
             <span class="shelf-sidebar-title">Autori</span>
           </div>
+          <input type="search" id="sb-author-q" placeholder="Cerca autore…" style="width:100%;margin:0 0 8px;font-size:12px;padding:6px 9px;border:1.5px solid var(--border);border-radius:var(--r-xs);background:var(--surface2);color:var(--text)">
           <div class="tag-filter-wrap sidebar-tags" id="libreria-author-filters"></div>
           <div class="shelf-sidebar-hdr" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
             <span class="shelf-sidebar-title">Tag</span>
             <span class="shelf-edit-toggle" id="tag-edit-toggle">Modifica</span>
           </div>
+          <input type="search" id="sb-tag-q" placeholder="Cerca tag…" style="width:100%;margin:0 0 8px;font-size:12px;padding:6px 9px;border:1.5px solid var(--border);border-radius:var(--r-xs);background:var(--surface2);color:var(--text)">
           <div class="tag-filter-wrap sidebar-tags" id="libreria-tag-filters"></div>
         </aside>
         <div class="libreria-content">
@@ -1515,6 +1517,8 @@ function renderShelfSidebar() {
   }
   listEl.innerHTML = html;
 }
+$('sb-author-q').addEventListener('input', e => { sbQ.authors = e.target.value; renderAuthorFilters(); });
+$('sb-tag-q').addEventListener('input', e => { sbQ.tags = e.target.value; renderTagFilters('libreria'); });
 $('tag-edit-toggle').addEventListener('click', () => {
   tagEdit.on = !tagEdit.on; tagEdit.pending = '';
   $('tag-edit-toggle').textContent = tagEdit.on ? 'Fine' : 'Modifica';
@@ -1565,13 +1569,15 @@ function renderTagFilters(ctx) {
   let tags = Object.keys(tagCounts).sort();
   const allTagsN = tags.length;
   const activeTag = ctx === 'cinema' ? cFilter.tag : lFilter.tag;
-  if (ctx === 'libreria' && !sbExpanded.tags && !tagEdit.on && tags.length > 5) {
+  const tq = ctx === 'libreria' ? grNorm(sbQ.tags) : '';
+  if (tq) tags = tags.filter(t => grNorm(t).includes(tq));
+  else if (ctx === 'libreria' && !sbExpanded.tags && !tagEdit.on && tags.length > 5) {
     tags.sort((a, b) => tagCounts[b] - tagCounts[a] || a.localeCompare(b));
     tags = tags.slice(0, 5);
     if (activeTag && tagCounts[activeTag] && !tags.includes(activeTag)) tags.push(activeTag);
   }
   if (!tags.length) {
-    el.innerHTML = ctx === 'libreria' ? '<span style="font-size:11.5px;color:var(--text3);font-style:italic">Nessun tag ancora.</span>' : '';
+    el.innerHTML = ctx === 'libreria' ? `<span style="font-size:11.5px;color:var(--text3);font-style:italic">${tq ? 'Nessun tag trovato.' : 'Nessun tag ancora.'}</span>` : '';
     return;
   }
   const active = ctx === 'cinema' ? cFilter.tag : lFilter.tag;
@@ -1579,12 +1585,13 @@ function renderTagFilters(ctx) {
   el.innerHTML = label +
     tags.map(t => `<button class="tag-filter-chip${active===t?' on':''}" data-ctx="${ctx}" data-tag="${esc(t)}">${esc(t)} <span style="opacity:.6">${tagCounts[t]}</span></button>` +
       (ctx === 'libreria' && tagEdit.on ? `<button class="tag-del" data-tag="${esc(t)}" style="font-size:11px;font-weight:700;color:var(--danger);background:none;border:none;cursor:pointer;padding:0 4px">${tagEdit.pending === t ? 'Elimina da tutti i libri? Sì' : '✕'}</button>` : '')).join('') +
-    (ctx === 'libreria' && allTagsN > 5 ? `<button class="sb-more" data-more="tags" style="width:100%;text-align:left">${sbExpanded.tags ? 'Mostra meno' : 'Mostra tutti (' + allTagsN + ')'}</button>` : '');
+    (ctx === 'libreria' && !tq && allTagsN > 5 ? `<button class="sb-more" data-more="tags" style="width:100%;text-align:left">${sbExpanded.tags ? 'Mostra meno' : 'Mostra tutti (' + allTagsN + ')'}</button>` : '');
 }
 
 // ── Autori nella barra laterale della Libreria (primi 5, poi "Mostra tutti")
 const sbExpanded = { tags: false, authors: false };
 const tagEdit = { on: false, pending: '' };
+const sbQ = { authors: '', tags: '' };
 function renderSupportoFilters() {
   const el = $('libreria-supporto-filters');
   if (!el) return;
@@ -1598,16 +1605,23 @@ function renderAuthorFilters() {
   if (!el) return;
   const counts = {};
   libriItems.forEach(b => { const a = ((b.authors || [])[0] || '').trim(); if (a) counts[a] = (counts[a] || 0) + 1; });
-  let names = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b));
+  const surname = n => grNorm(n.split(',')[0]).split(' ').filter(Boolean).pop() || '';
+  const alpha = (a, b) => surname(a).localeCompare(surname(b)) || a.localeCompare(b);
+  let names = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || alpha(a, b));
   const total = names.length;
+  const aq = grNorm(sbQ.authors);
   const active = (lFilter.author || '').trim().toLowerCase();
   if (!total) { el.innerHTML = '<span style="font-size:11.5px;color:var(--text3);font-style:italic">Nessun autore.</span>'; return; }
-  const shown = sbExpanded.authors ? names : names.slice(0, 5);
+  let shown;
+  if (aq) shown = names.filter(n => grNorm(n).includes(aq)).sort(alpha).slice(0, 60);
+  else if (sbExpanded.authors) shown = [...names].sort(alpha);
+  else shown = names.slice(0, 5);
+  if (aq && !shown.length) { el.innerHTML = '<span style="font-size:11.5px;color:var(--text3);font-style:italic">Nessun autore trovato.</span>'; return; }
   const act = names.find(n => n.toLowerCase() === active);
   if (act && !shown.includes(act)) shown.push(act);
   const chips = shown.map(n => `<button class="author-chip${n.toLowerCase() === active ? ' on' : ''}" data-author="${esc(n)}">${esc(n)} <span style="opacity:.6">${counts[n]}</span></button>`).join('');
-  el.innerHTML = (sbExpanded.authors ? `<div class="sb-scroll" style="display:flex;flex-wrap:wrap;gap:6px">${chips}</div>` : chips) +
-    (total > 5 ? `<button class="sb-more" data-more="authors" style="width:100%;text-align:left">${sbExpanded.authors ? 'Mostra meno' : 'Mostra tutti (' + total + ')'}</button>` : '');
+  el.innerHTML = (sbExpanded.authors || aq ? `<div class="sb-scroll" style="display:flex;flex-wrap:wrap;gap:6px">${chips}</div>` : chips) +
+    (!aq && total > 5 ? `<button class="sb-more" data-more="authors" style="width:100%;text-align:left">${sbExpanded.authors ? 'Mostra meno' : 'Mostra tutti (' + total + ')'}</button>` : '');
 }
 document.addEventListener('click', async e => {
   const del = e.target.closest('.tag-del');
