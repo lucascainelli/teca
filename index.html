@@ -445,6 +445,11 @@ img{display:block;max-width:100%}
   justify-content:start;
   gap:14px;
 }
+/* vista solo copertine */
+.items-grid.covers-only{gap:20px 16px}
+.items-grid.covers-only .item-card{background:none;box-shadow:none;overflow:visible}
+.items-grid.covers-only .item-info{display:none}
+.items-grid.covers-only .item-poster-wrap{border-radius:3px;box-shadow:0 4px 14px rgba(0,0,0,.22)}
 .grid-section{
   grid-column:1/-1;margin:22px 0 2px;padding-bottom:8px;
   border-bottom:2px solid var(--border);
@@ -1178,6 +1183,7 @@ img{display:block;max-width:100%}
               <option value="year">Anno ↓</option>
               <option value="rating">Valutazione</option>
             </select>
+            <button class="chip" id="libreria-view" title="Mostra solo le copertine">🖼 Copertine</button>
             <input type="search" class="search-box" id="libreria-search" placeholder="Filtra titoli...">
             <input type="search" class="search-box" id="libreria-author" placeholder="Cerca autore..." style="max-width:180px">
             <button class="btn-add-item" id="btn-add-libreria">+ Aggiungi libro</button>
@@ -1833,6 +1839,8 @@ function renderLibriGrid() {
   } else {
     libriHTML = items.map(i => cardHTML(i,'libro')).join('');
   }
+  $('libreria-grid').classList.toggle('covers-only', !!lFilter.coversOnly);
+  $('libreria-view').classList.toggle('on', !!lFilter.coversOnly);
   $('libreria-grid').innerHTML = items.length
     ? libriHTML
     : `<div class="empty-state">
@@ -1857,7 +1865,7 @@ function cardHTML(item, ctx) {
       progHTML = '<div style="height:3px;background:var(--border);border-radius:2px;overflow:hidden;margin-top:5px"><div style="height:100%;width:'+pct+'%;background:var(--libreria);border-radius:2px"></div></div>';
     }
   }
-  return `<div class="item-card" data-id="${item.id}" data-ctx="${ctx}">
+  return `<div class="item-card" data-id="${item.id}" data-ctx="${ctx}" title="${esc(item.title)}">
     <div class="item-poster-wrap">
       ${src
         ? `<img class="item-poster-img" src="${esc(src)}" data-hi="${esc(hiRes(src))}" onload="upgradeCover(this)" alt="${esc(item.title)}" loading="lazy" onerror="this.style.display='none';this.nextSibling.style.display='flex'">`
@@ -2953,6 +2961,12 @@ $('libreria-status-chips').addEventListener('click', e => {
   const b = e.target.closest('.chip'); if (!b) return;
   $('libreria-status-chips').querySelectorAll('.chip').forEach(c => c.classList.remove('on'));
   b.classList.add('on'); lFilter.status = b.dataset.status; renderLibriGrid();
+});
+try { lFilter.coversOnly = localStorage.getItem('teca-covers-only') === '1'; } catch(e) {}
+$('libreria-view').addEventListener('click', () => {
+  lFilter.coversOnly = !lFilter.coversOnly;
+  try { localStorage.setItem('teca-covers-only', lFilter.coversOnly ? '1' : '0'); } catch(e) {}
+  renderLibriGrid();
 });
 $('libreria-sort').addEventListener('change', e => { lFilter.sort = e.target.value; renderLibriGrid(); });
 $('libreria-author').addEventListener('input', e => { lFilter.author = e.target.value; renderLibriGrid(); });
