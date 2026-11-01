@@ -3315,34 +3315,88 @@ document.getElementById('import-start-btn').addEventListener('click', async () =
 
 
 // ═══════════════ FIX MISSING COVERS ═══════════════════════════
+// Carica un'immagine e la accetta solo se sembra una vera copertina (non segnaposto/pixel vuoto)
+function probeCover(url, timeout = 8000) {
+  return new Promise(resolve => {
+    if (!url) return resolve(null);
+    const im = new Image();
+    const t = setTimeout(() => { im.src = ''; resolve(null); }, timeout);
+    im.onload = () => {
+      clearTimeout(t);
+      const r = im.naturalWidth / im.naturalHeight;
+      resolve(im.naturalHeight >= 150 && r >= 0.5 && r <= 0.8 ? im : null);
+    };
+    im.onerror = () => { clearTimeout(t); resolve(null); };
+    im.src = url;
+  });
+}
+function isbn13to10(i13) {
+  const d = String(i13 || '').replace(/\D/g, '');
+  if (d.length !== 13 || !d.startsWith('978')) return '';
+  const b = d.slice(3, 12);
+  let sum = 0; for (let k = 0; k < 9; k++) sum += (10 - k) * +b[k];
+  const c = (11 - (sum % 11)) % 11;
+  return b + (c === 10 ? 'X' : String(c));
+}
+async function findValidCover(book) {
+  const isbn = String(book.isbn13 || '').replace(/[^0-9Xx]/g, '');
+  const isbn10 = isbn.length === 13 ? isbn13to10(isbn) : (isbn.length === 10 ? isbn : '');
+  const cands = [];
+  if (isbn) cands.push(`https://covers.openlibrary.org/b/isbn/${isbn}-L.jpg?default=false`);
+  if (isbn10) cands.push(`https://images-na.ssl-images-amazon.com/images/P/${isbn10}.01.LZZZZZZZ.jpg`);
+  for (const u of cands) { const ok = await probeCover(u); if (ok) return u; }
+  // Google Books: per ISBN, poi titolo+autore
+  const a0 = (book.authors && book.authors[0]) ? book.authors[0].split(',')[0].trim() : '';
+  const queries = [];
+  if (isbn) queries.push(`isbn:${isbn}`);
+  if (book.title) queries.push(encodeURIComponent(book.title.replace(/\(.*?\)/g, '').split(':')[0].trim() + (a0 ? ' ' + a0 : '')));
+  for (const q of queries) {
+    try {
+      const r = await fetch(`https://www.googleapis.com/books/v1/volumes?q=${q}&maxResults=3&key=${GOOGLE_BOOKS_KEY}`);
+      const d = await r.json();
+      for (const it of (d.items || [])) {
+        const t = it.volumeInfo?.imageLinks?.thumbnail;
+        if (!t) continue;
+        const u = hiRes(t);
+        if (await probeCover(u)) return u;
+        const u1 = t.replace('http://', 'https://');
+        if (await probeCover(u1)) return u1;
+      }
+    } catch(e) {}
+  }
+  return null;
+}
 document.getElementById('btn-fix-covers').addEventListener('click', async () => {
   $('user-menu').style.display = 'none';
-  const missing = libriItems.filter(b => !b.cover && !b.poster);
-  if (!missing.length) { toast('Nessuna copertina mancante!'); return; }
-
-  // Build a simple progress toast
-  toast(`Cerco copertine per ${missing.length} libri…`);
-
-  let fixed = 0;
-  const BATCH = 4;
-  for (let i = 0; i < missing.length; i += BATCH) {
-    const chunk = missing.slice(i, i + BATCH);
-    await Promise.all(chunk.map(async book => {
-      const extra = await fetchBookData(book.isbn13 || '', book.title, book.authors);
-      if (extra && extra.cover) {
-        try {
-          await saveItem(book.id, 'libro', {
-            cover:    extra.cover,
-            googleId: extra.googleId || book.googleId || '',
-            overview: extra.overview || book.overview || ''
-          });
-          fixed++;
-        } catch(e) { console.warn('fix cover failed', book.title, e); }
-      }
+  toast('Controllo le copertine…');
+  // candidati: senza copertina, oppure con copertina che non è una vera copertina (segnaposto, rotta)
+  const todo = [];
+  const BATCH0 = 8;
+  for (let i = 0; i < libriItems.length; i += BATCH0) {
+    await Promise.all(libriItems.slice(i, i + BATCH0).map(async b => {
+      const cur = b.cover || b.poster;
+      if (!cur) { todo.push(b); return; }
+      if (String(cur).startsWith('data:')) return;      // caricata a mano: non toccare
+      if (!(await probeCover(hiRes(cur))) && !(await probeCover(cur))) todo.push(b);
     }));
-    if (i + BATCH < missing.length) await new Promise(r => setTimeout(r, 400));
   }
-  toast(`✓ Aggiornate ${fixed} copertine su ${missing.length} libri`);
+  if (!todo.length) { toast('Nessuna copertina mancante!'); return; }
+  toast(`Cerco copertine per ${todo.length} libri…`);
+
+  let fixed = 0; const notFound = [];
+  const BATCH = 4;
+  for (let i = 0; i < todo.length; i += BATCH) {
+    await Promise.all(todo.slice(i, i + BATCH).map(async book => {
+      const url = await findValidCover(book);
+      if (url) {
+        try { await saveItem(book.id, 'libro', { cover: url }); fixed++; }
+        catch(e) { console.warn('fix cover failed', book.title, e); }
+      } else notFound.push(book.title);
+    }));
+    await new Promise(r => setTimeout(r, 300));
+  }
+  console.log('Copertine non trovate (' + notFound.length + '):', notFound);
+  toast(`✓ Trovate ${fixed} copertine su ${todo.length}. Mancano: ${notFound.length}`);
 });
 
 // Init empty grids
