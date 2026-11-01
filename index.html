@@ -1614,7 +1614,19 @@ function renderAuthorFilters() {
   if (!el) return;
   const counts = {};
   libriItems.forEach(b => { const a = ((b.authors || [])[0] || '').trim(); if (a) counts[a] = (counts[a] || 0) + 1; });
-  const surname = n => grNorm(n.split(',')[0]).split(' ').filter(Boolean).pop() || '';
+  const PART = new Set(['de','di','da','del','della','dei','degli','delle','dello','dal','dalla','van','von','der','den','du','des','dos','das','le','la','lo','el','al','ter','ten','bin','ibn','y']);
+  const EXC = { 'mario vargas llosa': 'vargas llosa', 'gabriel garcia marquez': 'garcia marquez', 'jose ortega y gasset': 'ortega y gasset', 'byung chul han': 'han' };
+  const surname = n => {
+    const raw = String(n || '');
+    if (raw.includes(',')) return grNorm(raw.split(',')[0]);
+    const full = grNorm(raw);
+    if (EXC[full]) return EXC[full];
+    const t = full.split(' ').filter(Boolean);
+    if (!t.length) return '';
+    let i = t.length - 1;
+    while (i > 1 && PART.has(t[i - 1])) i--;
+    return t.slice(i).join(' ');
+  };
   const alpha = (a, b) => surname(a).localeCompare(surname(b)) || a.localeCompare(b);
   let names = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || alpha(a, b));
   const total = names.length;
