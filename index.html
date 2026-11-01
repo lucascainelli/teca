@@ -3549,7 +3549,11 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
   const idx = new Map();
   libriItems.forEach(b => grKeys(b.title).forEach(k => { if (!idx.has(k)) idx.set(k, []); idx.get(k).push(b); }));
   const statusMap = { 'read':'letto', 'to-read':'da_leggere', 'currently-reading':'in_lettura' };
-  const grTags = ($('gr-tags').value || '').split(',').map(x => x.trim()).filter(Boolean);
+  // formato: "scaffale" oppure "scaffale=nome del tag" (più scaffali possono confluire nello stesso tag)
+  const grTags = ($('gr-tags').value || '').split(',').map(x => x.trim()).filter(Boolean).map(x => {
+    const i = x.indexOf('=');
+    return i < 0 ? { sl: x, tag: x.replace(/-/g, ' ') } : { sl: x.slice(0, i).trim(), tag: x.slice(i + 1).trim() };
+  });
   const btn = $('gr-sync-go'); btn.disabled = true; btn.textContent = 'Sincronizzo…';
   let nTags = 0, nSup = 0;
   const grForce = $('gr-force').checked;
@@ -3579,7 +3583,7 @@ document.getElementById('gr-sync-go').addEventListener('click', async () => {
     }
     if (grTags.length && Array.isArray(r.h)) {
       const have = book.tags || [];
-      const add = grTags.filter(sl => r.h.includes(sl)).map(sl => sl.replace(/-/g, ' ')).filter(t => !have.includes(t));
+      const add = [...new Set(grTags.filter(g => r.h.includes(g.sl)).map(g => g.tag))].filter(t => !have.includes(t));
       if (add.length) { upd.tags = [...have, ...add]; }
     }
     if (Object.keys(upd).length) {
