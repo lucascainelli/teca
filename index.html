@@ -530,6 +530,8 @@ img{display:block;max-width:100%}
 .s-da_vedere,.s-da_leggere{background:var(--cinema-bg);color:var(--cinema)}
 .s-archivio{background:var(--surface2);color:var(--text3)}
 .s-vorrei_leggere{background:#FEF3C7;color:#92400E}
+.s-desiderato{background:#FCE7F3;color:#9D174D}
+.item-rec{font-size:10.5px;color:var(--text3);margin-top:3px;line-height:1.3;font-style:italic}
 .s-in_visione,.s-in_lettura{background:#DBEAFE;color:var(--info)}
 .item-stars{font-size:10px;color:var(--gold);letter-spacing:-0.5px;margin-top:3px}
 
@@ -1018,6 +1020,7 @@ body{background:
 .grid-section.sec-vorrei-leggere{--sec:#7C3AED}
 .grid-section.sec-letti{--sec:#1A6E3C}
 .grid-section.sec-archivio{--sec:#6B6B66}
+.grid-section.sec-desiderato{--sec:#BE185D}
 
 .item-card{border-radius:16px;box-shadow:0 2px 12px rgba(17,17,16,.07)}
 .item-card:hover{transform:translateY(-6px);box-shadow:0 14px 34px rgba(17,17,16,.16)}
@@ -1298,6 +1301,12 @@ body{background:
             <span class="shelf-sidebar-title">Supporto</span>
           </div>
           <div class="tag-filter-wrap sidebar-tags" id="libreria-supporto-filters"></div>
+          <div id="libreria-rec-wrap" style="display:none">
+            <div class="shelf-sidebar-hdr" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
+              <span class="shelf-sidebar-title">Consigliato da</span>
+            </div>
+            <div class="tag-filter-wrap sidebar-tags" id="libreria-rec-filters"></div>
+          </div>
           <div class="shelf-sidebar-hdr" style="margin-top:16px;padding-top:14px;border-top:1px solid var(--border)">
             <span class="shelf-sidebar-title">Autori</span>
             <span class="shelf-edit-toggle" id="author-merge-btn" title="Unisci due scritture dello stesso autore">Unisci</span>
@@ -1320,6 +1329,7 @@ body{background:
               <button class="chip" data-status="in_lettura">📖 In lettura</button>
               <button class="chip" data-status="da_leggere">Da leggere</button>
               <button class="chip" data-status="vorrei_leggere">Vorrei leggere</button>
+              <button class="chip" data-status="desiderato">🛒 Desideri</button>
               <button class="chip" data-status="archivio">🗄 Archivio</button>
               <button class="chip" data-status="fav">★</button>
             </div>
@@ -1425,7 +1435,7 @@ import { initializeApp }          from 'https://www.gstatic.com/firebasejs/10.12
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut }
                                   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js';
 import { getFirestore, collection, addDoc, updateDoc, deleteDoc,
-         doc, query, orderBy, onSnapshot, serverTimestamp, getDoc, setDoc }
+         doc, query, orderBy, onSnapshot, serverTimestamp, getDoc, setDoc, writeBatch }
                                   from 'https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js';
 
 /* ─── FIREBASE CONFIG ─────────────────────────────────────────
@@ -1478,7 +1488,9 @@ let unsubAuthors;
 let shelfEditMode = false;
 let unsubShelves;
 let cFilter     = { type:'all', status:'all', sort:'recent', q:'', tag:'' };
-let lFilter     = { status:'all', sort:'recent', q:'', tag:'', author:'', shelf:'', supporto:'' };
+let lFilter     = { status:'all', sort:'recent', q:'', tag:'', author:'', shelf:'', supporto:'', rec:'' };
+// Ambito della Libreria: i libri della lista dei desideri restano fuori da conteggi e filtri finché non si apre "Desideri"
+function libriScope() { return lFilter.status === 'desiderato' ? libriItems.filter(i => i.status === 'desiderato') : libriItems.filter(i => i.status !== 'desiderato'); }
 let searchType  = 'film';
 let srTimer     = null;
 let srCache     = [];
@@ -1640,8 +1652,8 @@ function renderShelfSidebar() {
   const toggle = $('shelf-edit-toggle');
   if (toggle) toggle.textContent = shelfEditMode ? 'Fatto' : 'Modifica';
   const counts = {};
-  libriItems.forEach(i => (i.shelves||[]).forEach(s => { counts[s] = (counts[s]||0)+1; }));
-  let html = `<div class="shelf-item shelf-item-all${!lFilter.shelf?' on':''}" data-shelf="">Tutti <span class="shelf-count">${libriItems.length}</span></div>`;
+  libriScope().forEach(i => (i.shelves||[]).forEach(s => { counts[s] = (counts[s]||0)+1; }));
+  let html = `<div class="shelf-item shelf-item-all${!lFilter.shelf?' on':''}" data-shelf="">Tutti <span class="shelf-count">${libriScope().length}</span></div>`;
   if (!shelvesList.length) {
     if (!shelfEditMode) html += `<div class="shelf-empty">Nessuno scaffale ancora.<br>Creane uno qui sotto.</div>`;
   } else {
@@ -1702,7 +1714,7 @@ $('shelf-list').addEventListener('focusout', e => {
 function renderTagFilters(ctx) {
   const el = $(ctx+'-tag-filters');
   if (!el) return;
-  const items = ctx === 'cinema' ? cinemaItems : libriItems;
+  const items = ctx === 'cinema' ? cinemaItems : libriScope();
   const tagCounts = {};
   items.forEach(i => (i.tags||[]).forEach(t => { tagCounts[t] = (tagCounts[t]||0)+1; }));
   let tags = Object.keys(tagCounts).sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
@@ -1737,7 +1749,8 @@ function shopSuggestions() {
   return [...used, ...common.filter(c => !used.some(u => u.toLowerCase() === c.toLowerCase()))];
 }
 function renderStatusCounts() {
-  const n = { all: libriItems.length, fav: libriItems.filter(i => i.isFav).length };
+  const owned = libriItems.filter(i => i.status !== 'desiderato');
+  const n = { all: owned.length, fav: owned.filter(i => i.isFav).length };
   libriItems.forEach(i => { n[i.status] = (n[i.status] || 0) + 1; });
   document.querySelectorAll('#libreria-status-chips .chip').forEach(c => {
     const k = c.dataset.status;
@@ -1749,15 +1762,24 @@ function renderSupportoFilters() {
   const el = $('libreria-supporto-filters');
   if (!el) return;
   const n = { cartaceo: 0, kindle: 0 };
-  libriItems.forEach(b => { if (n[b.supporto] !== undefined) n[b.supporto]++; });
+  libriScope().forEach(b => { if (n[b.supporto] !== undefined) n[b.supporto]++; });
   el.innerHTML = [['cartaceo', 'Cartaceo'], ['kindle', 'Kindle']].map(([k, l]) =>
     `<button class="author-chip sup-chip${lFilter.supporto === k ? ' on' : ''}" data-sup="${k}">${l} <span style="opacity:.6">${n[k]}</span></button>`).join('');
+}
+function renderRecFilters() {
+  const wrap = $('libreria-rec-wrap'), el = $('libreria-rec-filters');
+  if (!wrap || !el) return;
+  const counts = {};
+  libriScope().forEach(b => (b.consigliatoDa || []).forEach(r => { counts[r] = (counts[r] || 0) + 1; }));
+  const names = Object.keys(counts).sort((a, b) => counts[b] - counts[a] || a.localeCompare(b, 'it'));
+  wrap.style.display = names.length ? 'block' : 'none';
+  el.innerHTML = names.map(n => `<button class="author-chip rec-chip${lFilter.rec === n ? ' on' : ''}" data-rec="${esc(n)}">${esc(n)} <span style="opacity:.6">${counts[n]}</span></button>`).join('');
 }
 function renderAuthorFilters() {
   const el = $('libreria-author-filters');
   if (!el) return;
   const counts = {};
-  libriItems.forEach(b => { const a = ((b.authors || [])[0] || '').trim(); if (a) counts[a] = (counts[a] || 0) + 1; });
+  libriScope().forEach(b => { const a = ((b.authors || [])[0] || '').trim(); if (a) counts[a] = (counts[a] || 0) + 1; });
   const PART = new Set(['de','di','da','del','della','dei','degli','delle','dello','dal','dalla','van','von','der','den','du','des','dos','das','le','la','lo','el','al','ter','ten','bin','ibn','y']);
   const EXC = { 'mario vargas llosa': 'vargas llosa', 'gabriel garcia marquez': 'garcia marquez', 'jose ortega y gasset': 'ortega y gasset', 'byung chul han': 'han' };
   const surname = n => {
@@ -1803,6 +1825,8 @@ document.addEventListener('click', async e => {
   if (sup) { lFilter.supporto = lFilter.supporto === sup.dataset.sup ? '' : sup.dataset.sup; renderLibriGrid(); return; }
   const more = e.target.closest('.sb-more');
   if (more) { sbExpanded[more.dataset.more] = !sbExpanded[more.dataset.more]; renderLibriGrid(); return; }
+  const rc = e.target.closest('.rec-chip');
+  if (rc) { lFilter.rec = lFilter.rec === rc.dataset.rec ? '' : rc.dataset.rec; renderLibriGrid(); return; }
   const ch = e.target.closest('.author-chip');
   if (!ch) return;
   const name = ch.dataset.author;
@@ -1828,12 +1852,12 @@ document.addEventListener('click', e => {
 function updateStats() {
   const films  = cinemaItems.filter(i => i.type === 'film').length;
   const serie  = cinemaItems.filter(i => i.type === 'serie').length;
-  const libri  = libriItems.length;
+  const libri  = libriItems.filter(i => i.status !== 'desiderato').length;
   $('s-film').textContent  = films;
   $('s-serie').textContent = serie;
   $('s-libri').textContent = libri;
   $('nc-cinema').textContent   = cinemaItems.length;
-  $('nc-libreria').textContent = libriItems.length;
+  $('nc-libreria').textContent = libriItems.filter(i => i.status !== 'desiderato').length;
 }
 
 window.toggleDashCard = toggleDashCard;
@@ -2073,8 +2097,10 @@ function renderCinemaGrid() {
 
 function renderLibriGrid() {
   let items = [...libriItems];
-  if (lFilter.status === 'fav') items = items.filter(i => i.isFav);
-  else if (lFilter.status !== 'all') items = items.filter(i => i.status === lFilter.status);
+  if (lFilter.status === 'fav') items = items.filter(i => i.isFav && i.status !== 'desiderato');
+  else if (lFilter.status === 'all') items = items.filter(i => i.status !== 'desiderato');
+  else items = items.filter(i => i.status === lFilter.status);
+  if (lFilter.rec) items = items.filter(i => (i.consigliatoDa || []).includes(lFilter.rec));
   if (lFilter.q) {
     const q = lFilter.q.toLowerCase();
     items = items.filter(i => i.title.toLowerCase().includes(q) || (i.authors||[]).join(' ').toLowerCase().includes(q));
@@ -2091,6 +2117,7 @@ function renderLibriGrid() {
   renderFavAuthors();
   renderStatusCounts();
   renderSupportoFilters();
+  renderRecFilters();
   renderAuthorFilters();
   renderShelfSidebar();
   let libriHTML = '';
@@ -2145,7 +2172,7 @@ function renderLibriGrid() {
     : `<div class="empty-state">
         <div class="empty-icon">📚</div>
         <div class="empty-title">Nessun libro</div>
-        <div class="empty-sub">Premi Aggiungi libro per cercare.</div>
+        <div class="empty-sub">${lFilter.status === 'desiderato' ? 'La lista dei desideri è vuota.' : 'Premi Aggiungi libro per cercare.'}</div>
        </div>`;
 }
 
@@ -2179,6 +2206,7 @@ function cardHTML(item, ctx) {
         <span class="s-badge s-${item.status}">${statusLabel(item.status)}</span>
       </div>
       ${stars ? `<div class="item-stars">${stars}</div>` : ''}
+      ${(item.consigliatoDa||[]).length ? `<div class="item-rec">da ${esc(item.consigliatoDa.join(', '))}</div>` : ''}
       ${tagHTML}
       ${progHTML}
     </div>
@@ -2210,7 +2238,7 @@ function openDetail(item, ctx) {
   const isBook = ctx === 'libro';
   const src    = detailItem.poster || detailItem.cover || '';
   const statusOpts = isBook
-    ? ['da_leggere','vorrei_leggere','in_lettura','letto','archivio']
+    ? ['desiderato','da_leggere','vorrei_leggere','in_lettura','letto','archivio']
     : ['da_vedere','in_visione','visto'];
   let meta = isBook
     ? [detailItem.authors?.join(', '), detailItem.publisher, detailItem.year, detailItem.pageCount ? detailItem.pageCount+' pag.' : ''].filter(Boolean).join(' · ')
@@ -2246,6 +2274,11 @@ function openDetail(item, ctx) {
             <option value="kindle" ${detailItem.supporto==='kindle'?'selected':''}>Kindle</option>
           </select>
         </div>
+        <div class="form-field" style="margin-top:10px">
+          <div class="field-label">Consigliato da</div>
+          <input type="text" class="field-select" id="d-rec" placeholder="Es. Camillo Langone (separa con virgola)" value="${esc((detailItem.consigliatoDa||[]).join(', '))}">
+        </div>
+        ${detailItem.amazonAsin ? `<a href="https://www.amazon.it/dp/${esc(detailItem.amazonAsin)}" target="_blank" rel="noopener" style="display:block;margin-top:10px;text-align:center;font-size:11px;padding:6px 8px;border-radius:var(--r-xs);border:1.5px solid var(--border);background:var(--surface);color:var(--text2);text-decoration:none;font-weight:600">🛒 Apri su Amazon</a>` : ''}
         <div class="form-field" style="margin-top:10px">
           <div class="field-label">Acquisto</div>
           <input type="date" class="field-select" id="d-acq-date" value="${esc(detailItem.dataAcquisto||'')}" title="Data di acquisto">
@@ -2447,7 +2480,7 @@ function openDetail(item, ctx) {
       notes:  document.getElementById('d-notes').value,
       rating: curRating,
       tags:   curTags,
-      ...(isBook ? { shelves: curShelves, supporto: (document.getElementById('d-supporto')||{}).value || '', dataAcquisto: (document.getElementById('d-acq-date')||{}).value || null, prezzo: (() => { const v = parseFloat(((document.getElementById('d-acq-price')||{}).value || '').replace(',', '.')); return isNaN(v) ? null : v; })(), negozio: ((document.getElementById('d-acq-shop')||{}).value || '').trim() } : {}),
+      ...(isBook ? { shelves: curShelves, consigliatoDa: ((document.getElementById('d-rec')||{}).value || '').split(',').map(x => x.trim()).filter(Boolean), supporto: (document.getElementById('d-supporto')||{}).value || '', dataAcquisto: (document.getElementById('d-acq-date')||{}).value || null, prezzo: (() => { const v = parseFloat(((document.getElementById('d-acq-price')||{}).value || '').replace(',', '.')); return isNaN(v) ? null : v; })(), negozio: ((document.getElementById('d-acq-shop')||{}).value || '').trim() } : {}),
       completedAt: isDone
         ? (document.getElementById('d-completed-date').value || todayInputValue())
         : (detailItem.completedAt || null),
@@ -3346,6 +3379,8 @@ function hiRes(u) {
 // Passa alla versione più grande solo se è una vera copertina (più larga e con le stesse proporzioni):
 // Google restituisce un segnaposto "image not available" per molti libri
 window.upgradeCover = function(img) {
+  // Amazon risponde con un GIF 1×1 quando non ha la copertina: mostra il segnaposto
+  if (img.naturalWidth <= 1) { img.dispatchEvent(new Event('error')); return; }
   const hi = img.dataset.hi;
   if (!hi || img.dataset.u || hi === img.src) return;
   img.dataset.u = '1';
@@ -3377,9 +3412,37 @@ window.imageToDataUrl = function(file) {
   });
 };
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+// Import una tantum dalla lista dei desideri di Amazon (si lancia dalla console: await tecaImportDesideri(righe))
+window.tecaImportDesideri = async (rows) => {
+  const MESI = { gennaio:0, febbraio:1, marzo:2, aprile:3, maggio:4, giugno:5, luglio:6, agosto:7, settembre:8, ottobre:9, novembre:10, dicembre:11 };
+  const toDate = t => { const m = String(t||'').match(/(\d{1,2})\s+([a-zà]+)\s+(\d{4})/i); return m && MESI[m[2].toLowerCase()] !== undefined ? new Date(+m[3], MESI[m[2].toLowerCase()], +m[1], 12) : new Date(); };
+  const norm = s => String(s||'').toLowerCase().replace(/[^a-z0-9à-ú]+/g, ' ').trim();
+  const known = new Set(libriItems.map(i => i.amazonAsin || '').filter(Boolean));
+  const knownT = new Set(libriItems.map(i => norm(i.title) + '|' + norm((i.authors||[])[0])));
+  const todo = rows.filter(r => !known.has(r.asin) && !knownT.has(norm(r.titolo) + '|' + norm(r.autore.split(',')[0])));
+  const skipped = rows.length - todo.length;
+  for (let i = 0; i < todo.length; i += 400) {
+    const batch = writeBatch(db);
+    todo.slice(i, i + 400).forEach(r => {
+      const when = toDate(r.aggiunto);
+      const kindle = /kindle/i.test(r.formato);
+      batch.set(doc(collection(db, 'users', user.uid, 'libri')), {
+        type:'libro', title:r.titolo, authors: r.autore ? r.autore.split(',').map(x => x.trim()).filter(Boolean).slice(0,1) : [],
+        year:'', cover:`https://images-na.ssl-images-amazon.com/images/P/${r.asin}.01.LZZZZZZZ.jpg`, overview:'',
+        publisher:'', pageCount:0, googleId:null, isbn13:'', amazonAsin:r.asin,
+        status:'desiderato', rating:0, notes:'', isFav:false, supporto: kindle ? 'kindle' : 'cartaceo',
+        consigliatoDa: r.consigliatoDa || [], tags:[], shelves:[],
+        addedAt: when, updatedAt: serverTimestamp()
+      });
+    });
+    await batch.commit();
+  }
+  toast(`✓ Importati ${todo.length} desideri (${skipped} già presenti)`);
+  return { importati: todo.length, giaPresenti: skipped };
+};
 function statusLabel(s) {
   return { visto:'Visto', da_vedere:'Da vedere', in_visione:'▶ In visione',
-           letto:'Letto', da_leggere:'Da leggere', in_lettura:'📖 In lettura', vorrei_leggere:'Vorrei leggere', archivio:'🗄 Archivio' }[s] || s;
+           letto:'Letto', da_leggere:'Da leggere', in_lettura:'📖 In lettura', vorrei_leggere:'Vorrei leggere', desiderato:'🛒 Desiderato', archivio:'🗄 Archivio' }[s] || s;
 }
 function inYear(ts, y) {
   if (!ts) return false;
